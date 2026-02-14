@@ -6,11 +6,6 @@ const NODE_HEIGHT = 160;
 const H_GAP = 60;
 const V_GAP = 80;
 
-interface LayoutResult {
-  nodes: Node[];
-  edges: Edge[];
-}
-
 // Calculate subtree width
 function subtreeWidth(node: TimelineNode): number {
   if (node.branches.length === 0) return NODE_WIDTH;
@@ -98,7 +93,7 @@ export function buildTreeLayout(
   selectedNodeId: string | null,
   onExpand: (nodeId: string) => void,
   onSelect: (nodeId: string) => void
-): LayoutResult & { hasChildrenMap: Map<string, boolean> } {
+): { nodes: Node[]; edges: Edge[]; hasChildrenMap: Map<string, boolean> } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const hasChildrenMap = new Map<string, boolean>();

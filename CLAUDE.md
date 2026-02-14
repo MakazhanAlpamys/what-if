@@ -44,12 +44,12 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
   - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`)
   - `stream.ts` — Client-side SSE stream handlers using shared `streamSSE()` helper with `AbortSignal` support, and `extractJSON` parser for K2 output
   - `tree-layout.ts` — Recursive tree → React Flow layout algorithm
-  - `tree-utils.ts` — Tree manipulation utilities (`findNodeById`, `findChainToNode`, `addBranchesToNode`, `collapseNode`, `collectAllNodes`, `getNodeDepth`)
+  - `tree-utils.ts` — Tree manipulation utilities (`findNodeById`, `findChainToNode`, `addBranchesToNode`, `collapseNode`, `collectAllNodes`)
   - `sse.ts` — Shared server-side SSE streaming helper for API routes
   - `rate-limit.ts` — In-memory rate limiter for API routes (with serverless caveats documented)
   - `validate.ts` — Runtime type guards for K2 API responses
   - `constants.ts` — Shared constants (`IMPACT_COLORS`, `IMPACT_LABELS`, `MAX_TREE_DEPTH`)
-  - `storage.ts` — localStorage persistence (save/load timelines, scenario history, JSON export)
+  - `storage.ts` — localStorage persistence (save timelines, scenario history, JSON export)
   - `use-theme.ts` — Dark/light theme hook with localStorage persistence
 
 ### Data flow
@@ -122,7 +122,7 @@ Tests live alongside source files as `*.test.ts`. Current test coverage:
 - `lib/tree-layout.test.ts` — Tree layout algorithm (4 tests)
 - `lib/stream.test.ts` — `extractJSON` parser: direct JSON, `<think>` blocks, markdown fences, brace scanning (13 tests)
 - `lib/sse.test.ts` — SSE stream forwarding, malformed chunk handling (6 tests)
-- `lib/tree-utils.test.ts` — Tree manipulation: findNodeById, findChainToNode, addBranchesToNode, collectAllNodes, getNodeDepth, collapseNode (14 tests)
-- `lib/storage.test.ts` — localStorage persistence: save/load timelines, history, deduplication (6 tests)
+- `lib/tree-utils.test.ts` — Tree manipulation: findNodeById, findChainToNode, addBranchesToNode, collectAllNodes, collapseNode (11 tests)
+- `lib/storage.test.ts` — localStorage persistence: save timelines, history, deduplication (4 tests)
 
 Run with: `npx vitest run` from `frontend/`

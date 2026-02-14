@@ -48,15 +48,6 @@ export function collectAllNodes(root: TimelineNode): TimelineNode[] {
   return result;
 }
 
-export function getNodeDepth(root: TimelineNode, targetId: string, depth = 0): number {
-  if (root.id === targetId) return depth;
-  for (const branch of root.branches) {
-    const found = getNodeDepth(branch, targetId, depth + 1);
-    if (found !== -1) return found;
-  }
-  return -1;
-}
-
 export function collapseNode(root: TimelineNode, nodeId: string): TimelineNode {
   if (root.id === nodeId) {
     return { ...root, branches: [] };

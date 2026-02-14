@@ -24,11 +24,10 @@ function cleanupExpired() {
 }
 
 // Clean up expired entries periodically (only in non-test environments)
-let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
-  cleanupTimer = setInterval(cleanupExpired, 60_000);
-  if (cleanupTimer && typeof cleanupTimer === "object" && "unref" in cleanupTimer) {
-    cleanupTimer.unref();
+  const timer = setInterval(cleanupExpired, 60_000);
+  if (typeof timer === "object" && "unref" in timer) {
+    timer.unref();
   }
 }
 

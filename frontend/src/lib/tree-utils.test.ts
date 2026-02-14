@@ -4,7 +4,6 @@ import {
   findChainToNode,
   addBranchesToNode,
   collectAllNodes,
-  getNodeDepth,
   collapseNode,
 } from "./tree-utils";
 import type { TimelineNode } from "./types";
@@ -84,20 +83,6 @@ describe("collectAllNodes", () => {
     const all = collectAllNodes(tree);
     expect(all).toHaveLength(4);
     expect(all.map((n) => n.id).sort()).toEqual(["b1", "b1-1", "b2", "root"]);
-  });
-});
-
-describe("getNodeDepth", () => {
-  it("returns 0 for root", () => {
-    expect(getNodeDepth(tree, "root")).toBe(0);
-  });
-
-  it("returns correct depth for nested node", () => {
-    expect(getNodeDepth(tree, "b1-1")).toBe(2);
-  });
-
-  it("returns -1 for non-existent node", () => {
-    expect(getNodeDepth(tree, "nope")).toBe(-1);
   });
 });
 

@@ -5,7 +5,7 @@ const HISTORY_KEY = "whatif-history";
 const MAX_HISTORY = 20;
 const MAX_SAVED = 50;
 
-export interface SavedTimeline {
+interface SavedTimeline {
   id: string;
   scenario: string;
   data: ScenarioResponse;
@@ -45,7 +45,7 @@ export function saveTimeline(scenario: string, data: ScenarioResponse): string {
   return id;
 }
 
-export function getSavedTimelines(): SavedTimeline[] {
+function getSavedTimelines(): SavedTimeline[] {
   const raw = safeGetItem(STORAGE_KEY);
   if (!raw) return [];
   try {
@@ -53,11 +53,6 @@ export function getSavedTimelines(): SavedTimeline[] {
   } catch {
     return [];
   }
-}
-
-export function deleteSavedTimeline(id: string): void {
-  const saved = getSavedTimelines().filter((t) => t.id !== id);
-  safeSetItem(STORAGE_KEY, JSON.stringify(saved));
 }
 
 export function addToHistory(scenario: string): void {

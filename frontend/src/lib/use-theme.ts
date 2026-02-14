@@ -25,18 +25,15 @@ export function useTheme() {
     document.documentElement.classList.toggle("light", theme === "light");
   }, [theme]);
 
-  const setTheme = useCallback((newTheme: Theme) => {
+  const toggleTheme = useCallback(() => {
+    const newTheme = theme === "dark" ? "light" : "dark";
     setThemeState(newTheme);
     try {
       localStorage.setItem(THEME_KEY, newTheme);
     } catch {
       // localStorage unavailable
     }
-  }, []);
+  }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [theme, setTheme]);
-
-  return { theme, setTheme, toggleTheme };
+  return { theme, toggleTheme };
 }

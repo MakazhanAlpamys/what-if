@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  saveTimeline,
-  getSavedTimelines,
-  deleteSavedTimeline,
-  addToHistory,
-  getHistory,
-  clearHistory,
-} from "./storage";
+import { saveTimeline, addToHistory, getHistory, clearHistory } from "./storage";
 import type { ScenarioResponse } from "./types";
 
 const mockStorage: Record<string, string> = {};
@@ -37,29 +30,11 @@ const mockScenarioData: ScenarioResponse = {
   },
 };
 
-describe("saveTimeline / getSavedTimelines", () => {
-  it("saves and retrieves a timeline", () => {
+describe("saveTimeline", () => {
+  it("saves a timeline and returns an id", () => {
     const id = saveTimeline("What if test?", mockScenarioData);
-    const saved = getSavedTimelines();
-    expect(saved).toHaveLength(1);
-    expect(saved[0].id).toBe(id);
-    expect(saved[0].scenario).toBe("What if test?");
-  });
-
-  it("orders newest first", () => {
-    saveTimeline("First", mockScenarioData);
-    saveTimeline("Second", mockScenarioData);
-    const saved = getSavedTimelines();
-    expect(saved[0].scenario).toBe("Second");
-  });
-});
-
-describe("deleteSavedTimeline", () => {
-  it("removes a saved timeline", () => {
-    const id = saveTimeline("Delete me", mockScenarioData);
-    expect(getSavedTimelines()).toHaveLength(1);
-    deleteSavedTimeline(id);
-    expect(getSavedTimelines()).toHaveLength(0);
+    expect(id).toBeTruthy();
+    expect(id.startsWith("tl-")).toBe(true);
   });
 });
 

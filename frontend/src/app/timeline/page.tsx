@@ -42,7 +42,6 @@ function TimelineContent() {
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const streamTextRef = useRef("");
 
   // Undo/redo state
   const [undoStack, setUndoStack] = useState<ScenarioResponse[]>([]);
@@ -50,7 +49,6 @@ function TimelineContent() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const hasChildrenMapRef = useRef<Map<string, boolean>>(new Map());
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -157,21 +155,17 @@ function TimelineContent() {
     showToast("Exported as JSON");
   }, [scenarioData, scenario, showToast]);
 
-  const handleRetry = useCallback(() => {
+  const startGeneration = useCallback(() => {
     setError(null);
     setIsGenerating(true);
     setStreamText("");
-    streamTextRef.current = "";
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     streamGenerate(
       scenario,
-      (text) => {
-        streamTextRef.current = text;
-        setStreamText(text);
-      },
+      (text) => setStreamText(text),
       (data) => {
         setScenarioData(data);
         setIsGenerating(false);
@@ -184,17 +178,15 @@ function TimelineContent() {
       },
       abortController.signal
     );
+
+    return abortController;
   }, [scenario]);
 
   // Build tree layout when data or expanding state changes
   useEffect(() => {
     if (!scenarioData) return;
 
-    const {
-      nodes: layoutNodes,
-      edges: layoutEdges,
-      hasChildrenMap,
-    } = buildTreeLayout(
+    const { nodes: layoutNodes, edges: layoutEdges } = buildTreeLayout(
       scenarioData.timeline,
       expandingNodeId,
       selectedNodeId,
@@ -202,7 +194,6 @@ function TimelineContent() {
       handleSelect
     );
 
-    hasChildrenMapRef.current = hasChildrenMap;
     setNodes(layoutNodes);
     setEdges(layoutEdges);
   }, [
@@ -222,32 +213,7 @@ function TimelineContent() {
       return;
     }
 
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    setIsGenerating(true);
-    setError(null);
-    setStreamText("");
-    streamTextRef.current = "";
-
-    streamGenerate(
-      scenario,
-      (text) => {
-        streamTextRef.current = text;
-        setStreamText(text);
-      },
-      (data) => {
-        setScenarioData(data);
-        setIsGenerating(false);
-        setStreamText("");
-        addToHistory(scenario);
-      },
-      (err) => {
-        setError(err);
-        setIsGenerating(false);
-      },
-      abortController.signal
-    );
+    const abortController = startGeneration();
 
     return () => {
       abortController.abort();
@@ -299,14 +265,6 @@ function TimelineContent() {
       role="main"
       aria-label="Timeline visualization"
     >
-      {/* Skip to content link */}
-      <a
-        href="#timeline-canvas"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded-lg focus:bg-violet-600 focus:px-4 focus:py-2 focus:text-white"
-      >
-        Skip to timeline
-      </a>
-
       {/* Top bar */}
       <div className="absolute top-0 right-0 left-0 z-40 flex items-center justify-between border-b border-violet-500/10 bg-[rgba(5,5,16,0.9)] px-3 py-2 backdrop-blur-xl sm:px-6 sm:py-3">
         <button
@@ -530,7 +488,7 @@ function TimelineContent() {
             <p className="mb-6 text-sm text-white/30">{error}</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
-                onClick={handleRetry}
+                onClick={startGeneration}
                 className="cursor-pointer rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
               >
                 Retry this scenario
