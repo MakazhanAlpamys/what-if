@@ -10,15 +10,23 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Clean up expired entries periodically
-setInterval(() => {
+function cleanupExpired() {
   const now = Date.now();
   for (const [key, entry] of store) {
     if (now > entry.resetTime) {
       store.delete(key);
     }
   }
-}, 60_000);
+}
+
+// Clean up expired entries periodically (only in non-test environments)
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
+  cleanupTimer = setInterval(cleanupExpired, 60_000);
+  if (cleanupTimer && typeof cleanupTimer === "object" && "unref" in cleanupTimer) {
+    cleanupTimer.unref();
+  }
+}
 
 interface RateLimitConfig {
   /** Maximum number of requests allowed in the window */

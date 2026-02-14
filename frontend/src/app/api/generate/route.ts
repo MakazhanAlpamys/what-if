@@ -56,10 +56,24 @@ export async function POST(request: NextRequest) {
   const { allowed, resetTime } = checkRateLimit(`generate:${ip}`, { limit: 10, windowSeconds: 60 });
   if (!allowed) return rateLimitResponse(resetTime);
 
-  const { scenario } = await request.json();
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { scenario } = body;
 
   if (!scenario || typeof scenario !== "string") {
     return Response.json({ error: "Scenario is required" }, { status: 400 });
+  }
+
+  if (scenario.length > 2000) {
+    return Response.json(
+      { error: "Scenario is too long. Maximum 2000 characters." },
+      { status: 400 }
+    );
   }
 
   const apiKey = process.env.K2_API_KEY;
@@ -88,10 +102,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
+    console.error("K2 API error:", response.status, await response.text());
     return Response.json(
-      { error: "K2 API error", details: errorText },
-      { status: response.status }
+      { error: "AI service is temporarily unavailable. Please try again." },
+      { status: 502 }
     );
   }
 

@@ -33,13 +33,13 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 - `frontend/src/app/` — Pages and API routes (Next.js App Router)
 - `frontend/src/app/not-found.tsx` — Custom 404 page
 - `frontend/src/app/global-error.tsx` — Custom error page
-- `frontend/src/components/` — React components (TimelineNode, DetailPanel, ErrorBoundary)
+- `frontend/src/components/` — React components (TimelineNode, DetailPanel, ErrorBoundary, Spinner)
 - `frontend/src/lib/` — Shared utilities:
   - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`)
-  - `stream.ts` — Client-side SSE stream handlers (`streamGenerate`, `streamExpand`)
+  - `stream.ts` — Client-side SSE stream handlers (`streamGenerate`, `streamExpand`) with `AbortSignal` support, and `extractJSON` parser for K2 output
   - `tree-layout.ts` — Recursive tree → React Flow layout algorithm
   - `sse.ts` — Shared server-side SSE streaming helper for API routes
-  - `rate-limit.ts` — In-memory rate limiter for API routes
+  - `rate-limit.ts` — In-memory rate limiter for API routes (with `unref`'d cleanup timer)
   - `validate.ts` — Runtime type guards for K2 API responses
   - `constants.ts` — Shared constants (`IMPACT_COLORS`, `IMPACT_LABELS`, `MAX_TREE_DEPTH`)
 
@@ -60,14 +60,16 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 
 ### SSE streaming pattern
 
-Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream()` helper from `lib/sse.ts`. It reads K2's SSE response, extracts content deltas, and forwards them to the client. The client-side `stream.ts` buffers lines, parses `data:` prefixed SSE events, accumulates full text, then extracts and validates JSON on `[DONE]`.
+Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream()` helper from `lib/sse.ts`. It reads K2's SSE response, extracts content deltas, and forwards them to the client. The client-side `stream.ts` buffers lines, parses `data:` prefixed SSE events, accumulates full text, then extracts and validates JSON on `[DONE]`. Both `streamGenerate` and `streamExpand` accept an optional `AbortSignal` for cancellation — the timeline page uses `AbortController` to cancel in-flight requests on unmount.
 
 ### Security
 
 - **Rate limiting**: Both API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand
-- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy configured in `next.config.ts`
+- **Input validation**: Scenario max length 2000 chars; chain array validated for structure and max depth 20
+- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy configured in `next.config.ts`
 - **Response validation**: K2 responses are validated with runtime type guards before use
 - **API key protection**: K2 API key is server-side only via `.env.local`, never exposed to client
+- **Error sanitization**: K2 API errors are logged server-side but generic messages returned to client
 - **ErrorBoundary**: Wraps the entire app to catch React rendering errors gracefully
 
 ## Tech Stack
@@ -97,5 +99,7 @@ Tests live alongside source files as `*.test.ts`. Current test coverage:
 - `lib/validate.test.ts` — Type guard validation (10 tests)
 - `lib/rate-limit.test.ts` — Rate limiter behavior (3 tests)
 - `lib/tree-layout.test.ts` — Tree layout algorithm (4 tests)
+- `lib/stream.test.ts` — `extractJSON` parser: direct JSON, `<think>` blocks, markdown fences, brace scanning (13 tests)
+- `lib/sse.test.ts` — SSE stream forwarding, malformed chunk handling (6 tests)
 
 Run with: `npx vitest run` from `frontend/`

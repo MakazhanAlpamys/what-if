@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { TimelineNode } from "@/lib/types";
 import { IMPACT_COLORS } from "@/lib/constants";
+import Spinner from "@/components/Spinner";
 
 interface DetailPanelProps {
   node: TimelineNode | null;
@@ -23,6 +25,24 @@ export default function DetailPanel({
   isExpanding,
   hasChildren,
 }: DetailPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!node) return;
+
+    // Focus the panel when it opens
+    panelRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [node, onClose]);
+
   return (
     <AnimatePresence>
       {node && (
@@ -33,7 +53,9 @@ export default function DetailPanel({
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           role="dialog"
           aria-label="Event details"
-          className="fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l border-violet-500/15 bg-[rgba(8,8,25,0.95)] backdrop-blur-xl sm:w-96"
+          ref={panelRef}
+          tabIndex={-1}
+          className="fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l border-violet-500/15 bg-[rgba(8,8,25,0.95)] backdrop-blur-xl outline-none sm:w-96"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-violet-500/10 px-6 py-4">
@@ -96,21 +118,7 @@ export default function DetailPanel({
               >
                 {isExpanding ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
+                    <Spinner className="h-4 w-4" />
                     K2 is thinking...
                   </span>
                 ) : (

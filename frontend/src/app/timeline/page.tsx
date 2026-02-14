@@ -9,7 +9,6 @@ import {
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
-  useReactFlow,
   type Node,
   type Edge,
 } from "@xyflow/react";
@@ -69,7 +68,6 @@ function TimelineContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const scenario = searchParams.get("q") || "";
-  const { fitView } = useReactFlow();
 
   const [scenarioData, setScenarioData] = useState<ScenarioResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -77,6 +75,7 @@ function TimelineContent() {
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -98,6 +97,7 @@ function TimelineContent() {
 
       setExpandingNodeId(nodeId);
 
+      const expandAbort = new AbortController();
       streamExpand(
         scenario,
         chain,
@@ -111,22 +111,22 @@ function TimelineContent() {
             };
           });
           setExpandingNodeId(null);
-          setTimeout(() => fitView({ duration: 500, padding: 0.2 }), 100);
         },
         (err) => {
           console.error("Expand error:", err);
           setExpandingNodeId(null);
-        }
+        },
+        expandAbort.signal
       );
     },
-    [scenarioData, expandingNodeId, scenario, fitView]
+    [scenarioData, expandingNodeId, scenario]
   );
 
   const handleSelect = useCallback((nodeId: string) => {
     setSelectedNodeId((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
-  // Build tree layout when data changes
+  // Build tree layout when data or expanding state changes (not on select)
   useEffect(() => {
     if (!scenarioData) return;
 
@@ -162,6 +162,9 @@ function TimelineContent() {
       return;
     }
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setIsGenerating(true);
     setError(null);
     setStreamText("");
@@ -173,13 +176,17 @@ function TimelineContent() {
         setScenarioData(data);
         setIsGenerating(false);
         setStreamText("");
-        setTimeout(() => fitView({ duration: 800, padding: 0.3 }), 200);
       },
       (err) => {
         setError(err);
         setIsGenerating(false);
-      }
+      },
+      abortController.signal
     );
+
+    return () => {
+      abortController.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -294,7 +301,6 @@ function TimelineContent() {
           minZoom={0.2}
           maxZoom={1.5}
           className="!bg-transparent"
-          proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
         >
           <Background color="rgba(139, 92, 246, 0.05)" gap={40} size={1} />

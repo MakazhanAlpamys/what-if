@@ -5,66 +5,82 @@ export async function streamGenerate(
   scenario: string,
   onChunk: (text: string) => void,
   onDone: (data: ScenarioResponse) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  signal?: AbortSignal
 ) {
-  const response = await fetch("/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenario }),
-  });
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario }),
+      signal,
+    });
 
-  if (!response.ok) {
-    const err = await response.json();
-    onError(err.error || "Failed to generate");
-    return;
-  }
-
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data:")) continue;
-
-      const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") {
-        const parsed = extractJSON(fullText);
-        if (parsed && isScenarioResponse(parsed)) {
-          onDone(parsed);
-        } else {
-          onError("Failed to parse AI response. The model returned invalid JSON.");
-        }
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.content) {
-          fullText += parsed.content;
-          onChunk(fullText);
-        }
-      } catch {
-        // Skip
-      }
+    if (!response.ok) {
+      const err = await response.json();
+      onError(err.error || "Failed to generate");
+      return;
     }
-  }
 
-  // If we get here without [DONE], try to parse what we have
-  const parsed = extractJSON(fullText);
-  if (parsed && isScenarioResponse(parsed)) {
-    onDone(parsed);
-  } else {
-    onError("Stream ended unexpectedly");
+    if (!response.body) {
+      onError("Response body is not available");
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === "[DONE]") {
+            const parsed = extractJSON(fullText);
+            if (parsed && isScenarioResponse(parsed)) {
+              onDone(parsed);
+            } else {
+              onError("Failed to parse AI response. The model returned invalid JSON.");
+            }
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              fullText += parsed.content;
+              onChunk(fullText);
+            }
+          } catch {
+            // Skip malformed chunks
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // If we get here without [DONE], try to parse what we have
+    const parsed = extractJSON(fullText);
+    if (parsed && isScenarioResponse(parsed)) {
+      onDone(parsed);
+    } else {
+      onError("Stream ended unexpectedly");
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") return;
+    onError(err instanceof Error ? err.message : "Stream failed");
   }
 }
 
@@ -73,69 +89,85 @@ export async function streamExpand(
   chain: { year: number; title: string; description: string }[],
   onChunk: (text: string) => void,
   onDone: (data: ExpandResponse) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  signal?: AbortSignal
 ) {
-  const response = await fetch("/api/expand", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenario, chain }),
-  });
+  try {
+    const response = await fetch("/api/expand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario, chain }),
+      signal,
+    });
 
-  if (!response.ok) {
-    const err = await response.json();
-    onError(err.error || "Failed to expand");
-    return;
-  }
-
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data:")) continue;
-
-      const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") {
-        const parsed = extractJSON(fullText);
-        if (parsed && isExpandResponse(parsed)) {
-          onDone(parsed);
-        } else {
-          onError("Failed to parse expand response");
-        }
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.content) {
-          fullText += parsed.content;
-          onChunk(fullText);
-        }
-      } catch {
-        // Skip
-      }
+    if (!response.ok) {
+      const err = await response.json();
+      onError(err.error || "Failed to expand");
+      return;
     }
-  }
 
-  const parsed = extractJSON(fullText);
-  if (parsed && isExpandResponse(parsed)) {
-    onDone(parsed);
-  } else {
-    onError("Stream ended unexpectedly");
+    if (!response.body) {
+      onError("Response body is not available");
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === "[DONE]") {
+            const parsed = extractJSON(fullText);
+            if (parsed && isExpandResponse(parsed)) {
+              onDone(parsed);
+            } else {
+              onError("Failed to parse expand response");
+            }
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              fullText += parsed.content;
+              onChunk(fullText);
+            }
+          } catch {
+            // Skip malformed chunks
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const parsed = extractJSON(fullText);
+    if (parsed && isExpandResponse(parsed)) {
+      onDone(parsed);
+    } else {
+      onError("Stream ended unexpectedly");
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") return;
+    onError(err instanceof Error ? err.message : "Stream failed");
   }
 }
 
-function extractJSON(text: string): unknown | null {
+export function extractJSON(text: string): unknown | null {
   // Try direct parse first
   try {
     return JSON.parse(text);

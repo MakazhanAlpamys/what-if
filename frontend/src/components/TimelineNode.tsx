@@ -5,6 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import type { TimelineNode as TNode } from "@/lib/types";
 import { IMPACT_COLORS, IMPACT_LABELS } from "@/lib/constants";
+import Spinner from "@/components/Spinner";
 
 type TimelineNodeData = {
   label: string;
@@ -27,6 +28,15 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
       onClick={() => onSelect(timelineNode.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(timelineNode.id);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${timelineNode.year}: ${timelineNode.title} — ${IMPACT_LABELS[timelineNode.impact]} impact`}
       className="cursor-pointer"
       style={{ minWidth: 220, maxWidth: 280 }}
     >
@@ -83,21 +93,7 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
           >
             {isExpanding ? (
               <span className="flex items-center justify-center gap-1.5">
-                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
+                <Spinner className="h-3 w-3" />
                 Exploring...
               </span>
             ) : (
