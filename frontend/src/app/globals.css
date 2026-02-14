@@ -13,6 +13,13 @@
   --card-border: rgba(139, 92, 246, 0.2);
 }
 
+html.light {
+  --background: #f8f6ff;
+  --foreground: #1a1a2e;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-border: rgba(139, 92, 246, 0.15);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -127,4 +134,32 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.5);
+}
+
+/* Light mode overrides */
+html.light body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html.light .starfield {
+  opacity: 0.15;
+}
+
+html.light .react-flow__background {
+  background: var(--background) !important;
+}
+
+html.light .react-flow__controls {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(139, 92, 246, 0.15) !important;
+}
+
+html.light .react-flow__controls-button {
+  fill: var(--foreground) !important;
+  border-bottom-color: rgba(139, 92, 246, 0.1) !important;
+}
+
+html.light .react-flow__minimap {
+  background: rgba(248, 246, 255, 0.9) !important;
 }

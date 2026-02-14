@@ -12,6 +12,7 @@ interface DetailPanelProps {
   scenario: string;
   onClose: () => void;
   onExpand: (nodeId: string) => void;
+  onCollapse: (nodeId: string) => void;
   isExpanding: boolean;
   hasChildren: boolean;
 }
@@ -22,6 +23,7 @@ export default function DetailPanel({
   scenario,
   onClose,
   onExpand,
+  onCollapse,
   isExpanding,
   hasChildren,
 }: DetailPanelProps) {
@@ -55,7 +57,7 @@ export default function DetailPanel({
           aria-label="Event details"
           ref={panelRef}
           tabIndex={-1}
-          className="fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l border-violet-500/15 bg-[rgba(8,8,25,0.95)] backdrop-blur-xl outline-none sm:w-96"
+          className="fixed top-0 right-0 z-50 flex h-full w-[85%] max-w-96 flex-col border-l border-violet-500/15 bg-[rgba(8,8,25,0.95)] backdrop-blur-xl outline-none"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-violet-500/10 px-6 py-4">
@@ -109,23 +111,33 @@ export default function DetailPanel({
             {/* Description */}
             <p className="mb-6 text-sm leading-relaxed text-white/60">{node.description}</p>
 
-            {/* Expand button */}
-            {!hasChildren && (
-              <button
-                onClick={() => onExpand(node.id)}
-                disabled={isExpanding}
-                className="mb-6 w-full cursor-pointer rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-300 transition-all hover:border-violet-500/40 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isExpanding ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Spinner className="h-4 w-4" />
-                    K2 is thinking...
-                  </span>
-                ) : (
-                  "Explore deeper — generate sub-branches"
-                )}
-              </button>
-            )}
+            {/* Action buttons */}
+            <div className="mb-6 flex flex-col gap-2">
+              {!hasChildren && (
+                <button
+                  onClick={() => onExpand(node.id)}
+                  disabled={isExpanding}
+                  className="w-full cursor-pointer rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-300 transition-all hover:border-violet-500/40 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isExpanding ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner className="h-4 w-4" />
+                      K2 is thinking...
+                    </span>
+                  ) : (
+                    "Explore deeper — generate sub-branches"
+                  )}
+                </button>
+              )}
+              {hasChildren && (
+                <button
+                  onClick={() => onCollapse(node.id)}
+                  className="w-full cursor-pointer rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-300/70 transition-all hover:border-red-500/30 hover:bg-red-500/10"
+                >
+                  Collapse branches
+                </button>
+              )}
+            </div>
 
             {/* Sub-branches preview */}
             {node.branches.length > 0 && (

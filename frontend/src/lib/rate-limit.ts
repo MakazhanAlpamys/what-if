@@ -1,6 +1,10 @@
 /**
- * Simple in-memory rate limiter for API routes.
+ * In-memory rate limiter for API routes.
  * Limits requests per IP address within a sliding time window.
+ *
+ * NOTE: This is an in-memory store. On serverless platforms (e.g. Vercel),
+ * each cold start creates a fresh map, reducing effectiveness.
+ * For production, consider using Redis/Upstash-based rate limiting.
  */
 
 interface RateLimitEntry {
@@ -71,7 +75,7 @@ export function checkRateLimit(
 export function rateLimitResponse(resetTime: number): Response {
   const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
   return Response.json(
-    { error: "Too many requests. Please try again later." },
+    { error: "Too many requests. Please try again later.", retryAfter },
     {
       status: 429,
       headers: { "Retry-After": String(retryAfter) },

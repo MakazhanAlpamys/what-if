@@ -33,26 +33,37 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 - `frontend/src/app/` — Pages and API routes (Next.js App Router)
 - `frontend/src/app/not-found.tsx` — Custom 404 page
 - `frontend/src/app/global-error.tsx` — Custom error page
-- `frontend/src/components/` — React components (TimelineNode, DetailPanel, ErrorBoundary, Spinner)
+- `frontend/src/components/` — React components:
+  - `TimelineNode.tsx` — React Flow custom node for timeline events
+  - `DetailPanel.tsx` — Slide-in panel with event details, expand/collapse controls
+  - `ErrorBoundary.tsx` — Global error boundary (sanitized error messages)
+  - `Spinner.tsx` — Reusable loading spinner
+  - `ThemeToggle.tsx` — Dark/light mode toggle button
+  - `SearchBar.tsx` — Timeline search with Ctrl+F shortcut
 - `frontend/src/lib/` — Shared utilities:
   - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`)
-  - `stream.ts` — Client-side SSE stream handlers (`streamGenerate`, `streamExpand`) with `AbortSignal` support, and `extractJSON` parser for K2 output
+  - `stream.ts` — Client-side SSE stream handlers using shared `streamSSE()` helper with `AbortSignal` support, and `extractJSON` parser for K2 output
   - `tree-layout.ts` — Recursive tree → React Flow layout algorithm
+  - `tree-utils.ts` — Tree manipulation utilities (`findNodeById`, `findChainToNode`, `addBranchesToNode`, `collapseNode`, `collectAllNodes`, `getNodeDepth`)
   - `sse.ts` — Shared server-side SSE streaming helper for API routes
-  - `rate-limit.ts` — In-memory rate limiter for API routes (with `unref`'d cleanup timer)
+  - `rate-limit.ts` — In-memory rate limiter for API routes (with serverless caveats documented)
   - `validate.ts` — Runtime type guards for K2 API responses
   - `constants.ts` — Shared constants (`IMPACT_COLORS`, `IMPACT_LABELS`, `MAX_TREE_DEPTH`)
+  - `storage.ts` — localStorage persistence (save/load timelines, scenario history, JSON export)
+  - `use-theme.ts` — Dark/light theme hook with localStorage persistence
 
 ### Data flow
 
-1. Home page (`app/page.tsx`) takes scenario input, routes to `/timeline?q=<scenario>`
+1. Home page (`app/page.tsx`) takes scenario input (with character counter, history, auto-submit examples), routes to `/timeline?q=<scenario>`
 2. Timeline page (`app/timeline/page.tsx`) calls `streamGenerate()` which POSTs to `/api/generate`
 3. API route streams SSE from K2 Think V2 with a system prompt enforcing structured JSON output
 4. Client collects streamed text, extracts JSON via regex fallback (model may wrap in markdown/thinking)
 5. Response is validated with `isScenarioResponse()` / `isExpandResponse()` type guards
 6. `buildTreeLayout()` converts the recursive `TimelineNode` tree into React Flow nodes/edges
 7. Clicking a node opens DetailPanel; "Explore deeper" triggers `streamExpand()` → `/api/expand` to generate sub-branches
-8. Tree expansion is limited to `MAX_TREE_DEPTH` (5) levels to prevent performance issues
+8. "Collapse branches" removes sub-branches from a node (with undo support)
+9. Tree expansion is limited to `MAX_TREE_DEPTH` (5) levels to prevent performance issues
+10. Timeline can be saved to localStorage, exported as JSON, and searched with Ctrl+F
 
 ### Core data type
 
@@ -60,24 +71,34 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 
 ### SSE streaming pattern
 
-Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream()` helper from `lib/sse.ts`. It reads K2's SSE response, extracts content deltas, and forwards them to the client. The client-side `stream.ts` buffers lines, parses `data:` prefixed SSE events, accumulates full text, then extracts and validates JSON on `[DONE]`. Both `streamGenerate` and `streamExpand` accept an optional `AbortSignal` for cancellation — the timeline page uses `AbortController` to cancel in-flight requests on unmount.
+Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream()` helper from `lib/sse.ts`. It reads K2's SSE response, extracts content deltas, and forwards them to the client. The client-side `stream.ts` uses a shared `streamSSE()` generic helper (deduplicated from the previous separate implementations). Both `streamGenerate` and `streamExpand` accept an optional `AbortSignal` for cancellation — the timeline page uses `AbortController` to cancel in-flight requests on unmount.
 
 ### Security
 
-- **Rate limiting**: Both API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand
-- **Input validation**: Scenario max length 2000 chars; chain array validated for structure and max depth 20
-- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy configured in `next.config.ts`
+- **Rate limiting**: Both API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand. Rate limit responses include `retryAfter` for client feedback. Note: in-memory store resets on serverless cold starts — consider Redis/Upstash for production.
+- **IP extraction**: Uses first entry from `x-forwarded-for` (split on comma) to mitigate IP spoofing via proxy chains.
+- **Input validation**: Scenario max length 2000 chars (with client-side counter); chain array validated for structure and max depth 20
+- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy (without `unsafe-eval`) configured in `next.config.ts`
 - **Response validation**: K2 responses are validated with runtime type guards before use
 - **API key protection**: K2 API key is server-side only via `.env.local`, never exposed to client
-- **Error sanitization**: K2 API errors are logged server-side but generic messages returned to client
+- **Error sanitization**: K2 API errors are logged server-side but generic messages returned to client. ErrorBoundary and global-error show sanitized messages only.
 - **ErrorBoundary**: Wraps the entire app to catch React rendering errors gracefully
+
+### Keyboard Shortcuts
+
+- `Ctrl+F` — Search timeline events
+- `Ctrl+Z` — Undo last change
+- `Ctrl+Shift+Z` / `Ctrl+Y` — Redo
+- `Ctrl+S` — Save timeline to localStorage
+- `Ctrl+E` — Export timeline as JSON
+- `Escape` — Close detail panel / search
 
 ## Tech Stack
 
 - **Next.js 16** with App Router and React Compiler enabled (`reactCompiler: true` in next.config.ts)
 - **React 19** with hooks-based state management (no external state library)
 - **TypeScript 5** (strict mode, `@/*` path alias → `./src/*`)
-- **@xyflow/react** (React Flow) for interactive tree visualization
+- **@xyflow/react** (React Flow) for interactive tree visualization with MiniMap
 - **Framer Motion** for animations
 - **Tailwind CSS 4** via `@tailwindcss/postcss`
 - **K2 Think V2** (`MBZUAI-IFM/K2-Think-v2`) as the AI reasoning model
@@ -101,5 +122,7 @@ Tests live alongside source files as `*.test.ts`. Current test coverage:
 - `lib/tree-layout.test.ts` — Tree layout algorithm (4 tests)
 - `lib/stream.test.ts` — `extractJSON` parser: direct JSON, `<think>` blocks, markdown fences, brace scanning (13 tests)
 - `lib/sse.test.ts` — SSE stream forwarding, malformed chunk handling (6 tests)
+- `lib/tree-utils.test.ts` — Tree manipulation: findNodeById, findChainToNode, addBranchesToNode, collectAllNodes, getNodeDepth, collapseNode (14 tests)
+- `lib/storage.test.ts` — localStorage persistence: save/load timelines, history, deduplication (6 tests)
 
 Run with: `npx vitest run` from `frontend/`

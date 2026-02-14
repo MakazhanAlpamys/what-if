@@ -41,10 +41,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="starfield" />
-        <ErrorBoundary>{children}</ErrorBoundary>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded-lg focus:bg-violet-600 focus:px-4 focus:py-2 focus:text-white"
+        >
+          Skip to content
+        </a>
+        <div className="starfield" aria-hidden="true" />
+        <div id="main-content">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </div>
       </body>
     </html>
   );

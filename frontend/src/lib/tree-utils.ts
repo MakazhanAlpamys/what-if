@@ -1,0 +1,68 @@
+import type { TimelineNode } from "./types";
+
+export function findNodeById(root: TimelineNode, id: string): TimelineNode | null {
+  if (root.id === id) return root;
+  for (const branch of root.branches) {
+    const found = findNodeById(branch, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function findChainToNode(
+  root: TimelineNode,
+  targetId: string,
+  chain: { year: number; title: string; description: string }[] = []
+): { year: number; title: string; description: string }[] | null {
+  const currentChain = [
+    ...chain,
+    { year: root.year, title: root.title, description: root.description },
+  ];
+  if (root.id === targetId) return currentChain;
+  for (const branch of root.branches) {
+    const found = findChainToNode(branch, targetId, currentChain);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function addBranchesToNode(
+  root: TimelineNode,
+  nodeId: string,
+  newBranches: TimelineNode[]
+): TimelineNode {
+  if (root.id === nodeId) {
+    return { ...root, branches: [...root.branches, ...newBranches] };
+  }
+  return {
+    ...root,
+    branches: root.branches.map((b) => addBranchesToNode(b, nodeId, newBranches)),
+  };
+}
+
+export function collectAllNodes(root: TimelineNode): TimelineNode[] {
+  const result: TimelineNode[] = [root];
+  for (const branch of root.branches) {
+    result.push(...collectAllNodes(branch));
+  }
+  return result;
+}
+
+export function getNodeDepth(root: TimelineNode, targetId: string, depth = 0): number {
+  if (root.id === targetId) return depth;
+  for (const branch of root.branches) {
+    const found = getNodeDepth(branch, targetId, depth + 1);
+    if (found !== -1) return found;
+  }
+  return -1;
+}
+
+export function collapseNode(root: TimelineNode, nodeId: string): TimelineNode {
+  if (root.id === nodeId) {
+    return { ...root, branches: [] };
+  }
+  return {
+    ...root,
+    branches: root.branches.map((b) => collapseNode(b, nodeId)),
+  };
+}

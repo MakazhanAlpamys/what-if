@@ -1,7 +1,6 @@
 "use client";
 
 export default function GlobalError({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -29,7 +28,7 @@ export default function GlobalError({
             </div>
             <h2 className="mb-2 text-xl font-semibold text-white/70">Reality collapsed</h2>
             <p className="mb-6 text-sm text-white/30">
-              {error.message || "An unexpected error tore through the timeline."}
+              An unexpected error tore through the timeline. Please try again.
             </p>
             <button
               onClick={reset}

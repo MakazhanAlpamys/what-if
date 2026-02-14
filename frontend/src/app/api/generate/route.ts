@@ -52,7 +52,9 @@ Rules:
 
 export async function POST(request: NextRequest) {
   const ip =
-    request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "unknown";
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
   const { allowed, resetTime } = checkRateLimit(`generate:${ip}`, { limit: 10, windowSeconds: 60 });
   if (!allowed) return rateLimitResponse(resetTime);
 
