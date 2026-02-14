@@ -42,6 +42,7 @@ function TimelineContent() {
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const expandAbortRef = useRef<AbortController | null>(null);
 
   // Undo/redo state
   const [undoStack, setUndoStack] = useState<ScenarioResponse[]>([]);
@@ -91,7 +92,7 @@ function TimelineContent() {
       if (!chain) return;
 
       if (chain.length >= MAX_TREE_DEPTH) {
-        setError(
+        showToast(
           `Maximum depth of ${MAX_TREE_DEPTH} levels reached. Try a new scenario for fresh exploration.`
         );
         return;
@@ -99,7 +100,9 @@ function TimelineContent() {
 
       setExpandingNodeId(nodeId);
 
+      expandAbortRef.current?.abort();
       const expandAbort = new AbortController();
+      expandAbortRef.current = expandAbort;
       streamExpand(
         scenario,
         chain,
@@ -114,10 +117,12 @@ function TimelineContent() {
             };
           });
           setExpandingNodeId(null);
+          expandAbortRef.current = null;
         },
         (err) => {
           console.error("Expand error:", err);
           setExpandingNodeId(null);
+          expandAbortRef.current = null;
           showToast("Failed to expand branch. Try again.");
         },
         expandAbort.signal
@@ -156,6 +161,7 @@ function TimelineContent() {
   }, [scenarioData, scenario, showToast]);
 
   const startGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
     setError(null);
     setIsGenerating(true);
     setStreamText("");
@@ -178,8 +184,6 @@ function TimelineContent() {
       },
       abortController.signal
     );
-
-    return abortController;
   }, [scenario]);
 
   // Build tree layout when data or expanding state changes
@@ -213,10 +217,11 @@ function TimelineContent() {
       return;
     }
 
-    const abortController = startGeneration();
+    startGeneration();
 
     return () => {
-      abortController.abort();
+      abortControllerRef.current?.abort();
+      expandAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

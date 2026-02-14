@@ -19,8 +19,12 @@ async function streamSSE<T>(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      onError(err.error || "Request failed");
+      try {
+        const err = await response.json();
+        onError(err.error || "Request failed");
+      } catch {
+        onError(`Request failed with status ${response.status}`);
+      }
       return;
     }
 

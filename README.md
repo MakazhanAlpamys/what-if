@@ -15,6 +15,19 @@ Enter a historical what-if scenario and watch branching timelines of consequence
 2. **AI generates a timeline tree** — K2 Think V2 reasons through cause-and-effect chains and produces branching consequences
 3. **Explore interactively** — Click nodes to see details, expand branches to go deeper (up to 5 levels)
 4. **Compare with reality** — Each scenario includes what actually happened in real history
+5. **Save & export** — Save timelines to localStorage or export as JSON
+6. **Search & navigate** — Search timeline events with Ctrl+F, undo/redo changes
+
+## Features
+
+- **Branching timeline tree** — Interactive visualization with zoom, pan, and minimap
+- **Real-time AI streaming** — SSE streaming shows the timeline as it generates
+- **Dark / light theme** — Toggle between themes, persisted in localStorage
+- **Timeline search** — Filter nodes by keyword with Ctrl+F
+- **Undo / redo** — Full undo/redo stack for branch expansions and collapses
+- **Save & export** — Save timelines to localStorage, export as JSON
+- **Scenario history** — Previously explored scenarios shown on the home page
+- **Keyboard shortcuts** — Ctrl+F (search), Ctrl+Z (undo), Ctrl+Shift+Z / Ctrl+Y (redo), Ctrl+S (save), Ctrl+E (export), Escape (close panels)
 
 ## Architecture
 
@@ -44,6 +57,8 @@ what-if/
 │   │   ├── components/
 │   │   │   ├── TimelineNode.tsx  # Custom React Flow node
 │   │   │   ├── DetailPanel.tsx   # Side panel with event details
+│   │   │   ├── SearchBar.tsx     # Timeline search with Ctrl+F
+│   │   │   ├── ThemeToggle.tsx   # Dark/light mode toggle
 │   │   │   ├── ErrorBoundary.tsx # React error boundary
 │   │   │   └── Spinner.tsx       # Shared loading spinner
 │   │   └── lib/
@@ -51,8 +66,11 @@ what-if/
 │   │       ├── stream.ts         # Client-side SSE handlers + extractJSON parser
 │   │       ├── sse.ts            # Server-side SSE streaming helper
 │   │       ├── tree-layout.ts    # Recursive tree → React Flow layout
+│   │       ├── tree-utils.ts     # Tree manipulation (find, expand, collapse)
+│   │       ├── storage.ts        # localStorage persistence + JSON export
 │   │       ├── validate.ts       # Runtime type guards for K2 responses
 │   │       ├── rate-limit.ts     # In-memory rate limiter
+│   │       ├── use-theme.ts      # Dark/light theme hook
 │   │       └── constants.ts      # Impact colors/labels, MAX_TREE_DEPTH
 │   └── public/
 │       └── favicon.svg
@@ -108,7 +126,7 @@ npm test           # Run tests (Vitest)
 | Animation       | Framer Motion                  | Smooth transitions, node appearance       |
 | Styling         | Tailwind CSS 4                 | Dark cosmic theme                         |
 | AI Model        | K2 Think V2                    | Chain-of-thought reasoning, structured JSON |
-| Testing         | Vitest                         | 36 tests across 5 test files              |
+| Testing         | Vitest                         | 51 tests across 7 test files              |
 | Code Quality    | ESLint 9 + Prettier            | Flat config, Tailwind plugin              |
 | Git Hooks       | Husky + lint-staged            | Pre-commit lint & format                  |
 | CI              | GitHub Actions                 | Lint → format → typecheck → test → build  |
@@ -127,7 +145,7 @@ npm test           # Run tests (Vitest)
 
 ```bash
 cd frontend
-npx vitest run           # 36 tests
+npx vitest run           # 51 tests
 npx tsc --noEmit         # Type check
 npx prettier --check .   # Format check
 ```
@@ -136,7 +154,9 @@ npx prettier --check .   # Format check
 | ---------------------- | ------------------------------------------------------------- | ----- |
 | `validate.test.ts`     | Type guards for ScenarioResponse & ExpandResponse             | 10    |
 | `stream.test.ts`       | `extractJSON` — direct JSON, `<think>` blocks, markdown fences, brace scanning | 13    |
+| `tree-utils.test.ts`   | Tree manipulation: find, chain, expand, collapse, collect     | 11    |
 | `sse.test.ts`          | SSE stream forwarding, malformed chunk handling               | 6     |
+| `storage.test.ts`      | localStorage persistence, history, JSON export                | 4     |
 | `tree-layout.test.ts`  | Tree layout algorithm, edge generation, selected state        | 4     |
 | `rate-limit.test.ts`   | Rate limiter allow/block/remaining behavior                   | 3     |
 

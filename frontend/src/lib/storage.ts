@@ -86,5 +86,5 @@ export function exportTimelineJSON(data: ScenarioResponse, scenario: string): vo
   a.href = url;
   a.download = `what-if-${scenario.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "-")}.json`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
