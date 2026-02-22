@@ -57,3 +57,15 @@ export function collapseNode(root: TimelineNode, nodeId: string): TimelineNode {
     branches: root.branches.map((b) => collapseNode(b, nodeId)),
   };
 }
+
+export function findNodeIdsOnPath(root: TimelineNode, targetId: string): Set<string> | null {
+  if (root.id === targetId) return new Set([root.id]);
+  for (const branch of root.branches) {
+    const result = findNodeIdsOnPath(branch, targetId);
+    if (result) {
+      result.add(root.id);
+      return result;
+    }
+  }
+  return null;
+}

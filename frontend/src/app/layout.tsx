@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import Starfield from "@/components/Starfield";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -49,7 +50,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <div className="starfield" aria-hidden="true" />
+        <Starfield />
         <div id="main-content">
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>

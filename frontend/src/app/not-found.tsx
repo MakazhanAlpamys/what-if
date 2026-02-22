@@ -7,10 +7,10 @@ export default function NotFound() {
         <h1 className="mb-2 bg-gradient-to-r from-violet-400 via-purple-400 to-indigo-400 bg-clip-text text-8xl font-bold text-transparent">
           404
         </h1>
-        <h2 className="mb-4 text-xl font-semibold text-white/70">
+        <h2 className="mb-4 text-xl font-semibold text-[var(--text-secondary)]">
           This reality doesn&apos;t exist
         </h2>
-        <p className="mb-8 text-sm text-white/30">
+        <p className="mb-8 text-sm text-[var(--text-faint)]">
           The timeline you&apos;re looking for may have diverged into an alternate dimension.
         </p>
         <Link

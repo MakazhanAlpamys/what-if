@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import ThemeToggle from "@/components/ThemeToggle";
+import SavedTimelinesModal from "@/components/SavedTimelinesModal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { getHistory, clearHistory, type HistoryEntry } from "@/lib/storage";
 
 const MAX_SCENARIO_LENGTH = 2000;
@@ -29,35 +31,56 @@ function useHistory() {
 export default function Home() {
   const [scenario, setScenario] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showSavedTimelines, setShowSavedTimelines] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { history, setHistory } = useHistory();
   const router = useRouter();
+
+  const navigateToScenario = (text: string) => {
+    setScenario(text);
+    setIsLoading(true);
+    router.push(`/timeline?q=${encodeURIComponent(text)}`);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!scenario.trim() || isLoading || scenario.length > MAX_SCENARIO_LENGTH) return;
-    setIsLoading(true);
-    router.push(`/timeline?q=${encodeURIComponent(scenario.trim())}`);
+    navigateToScenario(scenario.trim());
   };
 
-  const handleExample = (example: string) => {
-    setScenario(example);
-    setIsLoading(true);
-    router.push(`/timeline?q=${encodeURIComponent(example)}`);
-  };
-
-  const handleHistoryClick = (entry: HistoryEntry) => {
-    setScenario(entry.scenario);
-    setIsLoading(true);
-    router.push(`/timeline?q=${encodeURIComponent(entry.scenario)}`);
-  };
+  useEffect(() => {
+    const resetLoading = () => setIsLoading(false);
+    window.addEventListener("pageshow", resetLoading);
+    return () => window.removeEventListener("pageshow", resetLoading);
+  }, []);
 
   return (
     <main
       className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4"
       role="main"
     >
-      {/* Theme toggle */}
-      <div className="absolute top-4 right-4">
+      {/* Theme toggle + Saved timelines */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <button
+          onClick={() => setShowSavedTimelines(true)}
+          aria-label="Saved timelines"
+          title="Saved timelines"
+          className="cursor-pointer rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+            />
+          </svg>
+        </button>
         <ThemeToggle />
       </div>
 
@@ -83,7 +106,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mb-1 text-lg font-medium tracking-widest text-violet-300/70 uppercase"
+          className="mb-1 text-lg font-medium tracking-widest text-[var(--violet-text)] uppercase"
         >
           Heritage on K2 Think V2
         </motion.p>
@@ -92,7 +115,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
-          className="mx-auto mb-10 max-w-md text-base text-white/40"
+          className="mx-auto mb-10 max-w-md text-base text-[var(--text-muted)]"
         >
           Explore alternate realities. Enter a what-if scenario and watch branching timelines of
           consequences unfold.
@@ -120,7 +143,7 @@ export default function Home() {
               rows={3}
               maxLength={MAX_SCENARIO_LENGTH}
               aria-label="Enter your what-if scenario"
-              className="w-full resize-none rounded-2xl border border-violet-500/20 bg-[rgba(15,15,40,0.9)] px-4 py-3 text-base text-white placeholder-white/30 backdrop-blur-sm transition-colors outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/30 sm:px-6 sm:py-4 sm:text-lg"
+              className="w-full resize-none rounded-2xl border border-[var(--accent-faint)] bg-[var(--surface-primary)] px-4 py-3 text-base text-[var(--text-primary)] placeholder-[var(--text-faint)] backdrop-blur-sm transition-colors outline-none focus:border-[var(--accent-soft)] focus:ring-2 focus:ring-[var(--accent-muted)] sm:px-6 sm:py-4 sm:text-lg"
             />
           </div>
           {/* Character counter */}
@@ -131,7 +154,7 @@ export default function Home() {
                   ? scenario.length >= MAX_SCENARIO_LENGTH
                     ? "text-red-400"
                     : "text-yellow-400/60"
-                  : "text-white/20"
+                  : "text-[var(--text-ghost)]"
               }`}
             >
               {scenario.length}/{MAX_SCENARIO_LENGTH}
@@ -155,13 +178,13 @@ export default function Home() {
 
         {/* Examples */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
-          <p className="mb-3 text-sm text-white/30">Or try an example:</p>
+          <p className="mb-3 text-sm text-[var(--text-faint)]">Or try an example:</p>
           <div className="flex flex-wrap justify-center gap-2">
             {EXAMPLE_SCENARIOS.map((example) => (
               <button
                 key={example}
-                onClick={() => handleExample(example)}
-                className="cursor-pointer rounded-lg border border-violet-500/10 bg-violet-500/5 px-3 py-1.5 text-sm text-violet-300/60 transition-all hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-violet-300"
+                onClick={() => navigateToScenario(example)}
+                className="cursor-pointer rounded-lg border border-[var(--accent-ghost)] bg-[var(--accent-ghost)] px-3 py-1.5 text-sm text-[var(--violet-text-muted)] transition-all hover:border-[var(--accent-muted)] hover:bg-[var(--accent-ghost)] hover:text-[var(--violet-text)]"
               >
                 {example}
               </button>
@@ -178,13 +201,10 @@ export default function Home() {
             className="mt-8"
           >
             <div className="mb-3 flex items-center justify-center gap-3">
-              <p className="text-sm text-white/30">Recent scenarios:</p>
+              <p className="text-sm text-[var(--text-faint)]">Recent scenarios:</p>
               <button
-                onClick={() => {
-                  clearHistory();
-                  setHistory([]);
-                }}
-                className="cursor-pointer text-xs text-white/20 transition-colors hover:text-white/40"
+                onClick={() => setShowClearConfirm(true)}
+                className="cursor-pointer text-xs text-[var(--text-ghost)] transition-colors hover:text-[var(--text-muted)]"
               >
                 Clear
               </button>
@@ -193,8 +213,8 @@ export default function Home() {
               {history.slice(0, 6).map((entry) => (
                 <button
                   key={entry.timestamp}
-                  onClick={() => handleHistoryClick(entry)}
-                  className="max-w-[200px] cursor-pointer truncate rounded-lg border border-indigo-500/10 bg-indigo-500/5 px-3 py-1.5 text-sm text-indigo-300/60 transition-all hover:border-indigo-500/30 hover:bg-indigo-500/10 hover:text-indigo-300"
+                  onClick={() => navigateToScenario(entry.scenario)}
+                  className="max-w-[200px] cursor-pointer truncate rounded-lg border border-[var(--accent-ghost)] bg-[var(--accent-ghost)] px-3 py-1.5 text-sm text-[var(--indigo-text-muted)] transition-all hover:border-[var(--accent-muted)] hover:bg-[var(--accent-ghost)] hover:text-[var(--violet-text)]"
                   title={entry.scenario}
                 >
                   {entry.scenario}
@@ -209,11 +229,32 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.5 }}
-          className="mt-6 text-xs text-white/15"
+          className="mt-6 text-xs text-[var(--text-invisible)]"
         >
           Press Enter to submit
         </motion.p>
       </motion.div>
+
+      {/* Saved Timelines Modal */}
+      <SavedTimelinesModal
+        isOpen={showSavedTimelines}
+        onClose={() => setShowSavedTimelines(false)}
+      />
+
+      {/* Clear History Confirmation */}
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        title="Clear History?"
+        message="This will remove all your recent scenarios. This action cannot be undone."
+        confirmLabel="Clear All"
+        variant="danger"
+        onConfirm={() => {
+          clearHistory();
+          setHistory([]);
+          setShowClearConfirm(false);
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
     </main>
   );
 }

@@ -9,7 +9,6 @@ import Spinner from "@/components/Spinner";
 interface DetailPanelProps {
   node: TimelineNode | null;
   realHistory: string;
-  scenario: string;
   onClose: () => void;
   onExpand: (nodeId: string) => void;
   onCollapse: (nodeId: string) => void;
@@ -20,7 +19,6 @@ interface DetailPanelProps {
 export default function DetailPanel({
   node,
   realHistory,
-  scenario,
   onClose,
   onExpand,
   onCollapse,
@@ -31,19 +29,8 @@ export default function DetailPanel({
 
   useEffect(() => {
     if (!node) return;
-
-    // Focus the panel when it opens
     panelRef.current?.focus();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [node, onClose]);
+  }, [node]);
 
   return (
     <AnimatePresence>
@@ -53,21 +40,27 @@ export default function DetailPanel({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 400, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={(_, info) => {
+            if (info.offset.x > 100) onClose();
+          }}
           role="dialog"
           aria-label="Event details"
           ref={panelRef}
           tabIndex={-1}
-          className="fixed top-0 right-0 z-50 flex h-full w-[85%] max-w-96 flex-col border-l border-violet-500/15 bg-[rgba(8,8,25,0.95)] backdrop-blur-xl outline-none"
+          className="fixed top-0 right-0 z-50 flex h-full w-[85%] max-w-96 flex-col border-l border-[var(--accent-border)] bg-[var(--surface-secondary)] backdrop-blur-xl outline-none"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-violet-500/10 px-6 py-4">
-            <h2 className="text-sm font-medium tracking-wider text-white/50 uppercase">
+          <div className="flex items-center justify-between border-b border-[var(--accent-ghost)] px-6 py-4">
+            <h2 className="text-sm font-medium tracking-wider text-[var(--text-tertiary)] uppercase">
               Event Details
             </h2>
             <button
               onClick={onClose}
               aria-label="Close panel"
-              className="cursor-pointer rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+              className="cursor-pointer rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
             >
               <svg
                 className="h-5 w-5"
@@ -106,10 +99,14 @@ export default function DetailPanel({
             </div>
 
             {/* Title */}
-            <h3 className="mb-4 text-xl leading-tight font-bold text-white">{node.title}</h3>
+            <h3 className="mb-4 text-xl leading-tight font-bold text-[var(--text-primary)]">
+              {node.title}
+            </h3>
 
             {/* Description */}
-            <p className="mb-6 text-sm leading-relaxed text-white/60">{node.description}</p>
+            <p className="mb-6 text-sm leading-relaxed text-[var(--text-tertiary)]">
+              {node.description}
+            </p>
 
             {/* Action buttons */}
             <div className="mb-6 flex flex-col gap-2">
@@ -117,7 +114,7 @@ export default function DetailPanel({
                 <button
                   onClick={() => onExpand(node.id)}
                   disabled={isExpanding}
-                  className="w-full cursor-pointer rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-300 transition-all hover:border-violet-500/40 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="w-full cursor-pointer rounded-xl border border-[var(--accent-faint)] bg-[var(--accent-ghost)] px-4 py-3 text-sm font-medium text-[var(--violet-text)] transition-all hover:border-[var(--accent-muted)] hover:bg-[var(--accent-faint)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isExpanding ? (
                     <span className="flex items-center justify-center gap-2">
@@ -142,14 +139,14 @@ export default function DetailPanel({
             {/* Sub-branches preview */}
             {node.branches.length > 0 && (
               <div className="mb-6">
-                <h4 className="mb-3 text-xs font-medium tracking-wider text-white/30 uppercase">
+                <h4 className="mb-3 text-xs font-medium tracking-wider text-[var(--text-faint)] uppercase">
                   Branches ({node.branches.length})
                 </h4>
                 <div className="space-y-2">
                   {node.branches.map((branch) => (
                     <div
                       key={branch.id}
-                      className="rounded-lg border border-violet-500/10 bg-violet-500/5 p-3"
+                      className="rounded-lg border border-[var(--accent-ghost)] bg-[var(--accent-ghost)] p-3"
                     >
                       <div className="mb-1 flex items-center gap-2">
                         <span
@@ -158,9 +155,13 @@ export default function DetailPanel({
                         >
                           {branch.year}
                         </span>
-                        <span className="text-xs font-medium text-white/70">{branch.title}</span>
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {branch.title}
+                        </span>
                       </div>
-                      <p className="line-clamp-2 text-xs text-white/30">{branch.description}</p>
+                      <p className="line-clamp-2 text-xs text-[var(--text-faint)]">
+                        {branch.description}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -168,7 +169,7 @@ export default function DetailPanel({
             )}
 
             {/* Divider */}
-            <div className="mb-4 border-t border-violet-500/10" />
+            <div className="mb-4 border-t border-[var(--accent-ghost)]" />
 
             {/* Real history */}
             <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-4">
@@ -176,14 +177,6 @@ export default function DetailPanel({
                 What actually happened
               </h4>
               <p className="text-xs leading-relaxed text-blue-200/40">{realHistory}</p>
-            </div>
-
-            {/* Scenario */}
-            <div className="mt-4 rounded-xl border border-violet-500/10 bg-violet-500/5 p-4">
-              <h4 className="mb-2 text-xs font-medium tracking-wider text-violet-300/50 uppercase">
-                Original scenario
-              </h4>
-              <p className="text-xs text-violet-200/40 italic">&ldquo;{scenario}&rdquo;</p>
             </div>
           </div>
         </motion.div>

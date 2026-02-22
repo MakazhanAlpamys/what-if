@@ -7,9 +7,10 @@ import { collectAllNodes } from "@/lib/tree-utils";
 interface SearchBarProps {
   root: TimelineNode | null;
   onSelectNode: (nodeId: string) => void;
+  onNavigateToNode?: (nodeId: string) => void;
 }
 
-export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
+export default function SearchBar({ root, onSelectNode, onNavigateToNode }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [results, setResults] = useState<TimelineNode[]>([]);
@@ -64,7 +65,7 @@ export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
         onClick={() => setIsOpen(true)}
         aria-label="Search timeline (Ctrl+F)"
         title="Search timeline (Ctrl+F)"
-        className="cursor-pointer rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+        className="cursor-pointer rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
       >
         <svg
           className="h-4 w-4"
@@ -84,10 +85,10 @@ export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
   }
 
   return (
-    <div className="absolute top-14 right-4 z-50 w-80 rounded-xl border border-violet-500/20 bg-[rgba(8,8,25,0.95)] p-3 shadow-xl backdrop-blur-xl">
+    <div className="absolute top-14 right-4 z-50 w-80 rounded-xl border border-[var(--accent-faint)] bg-[var(--surface-secondary)] p-3 shadow-xl backdrop-blur-xl">
       <div className="flex items-center gap-2">
         <svg
-          className="h-4 w-4 shrink-0 text-white/30"
+          className="h-4 w-4 shrink-0 text-[var(--text-faint)]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -105,7 +106,7 @@ export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder="Search events, years..."
-          className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+          className="flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
           aria-label="Search timeline events"
         />
         <button
@@ -114,7 +115,7 @@ export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
             setQuery("");
             setResults([]);
           }}
-          className="cursor-pointer text-white/30 hover:text-white/60"
+          className="cursor-pointer text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"
           aria-label="Close search"
         >
           <svg
@@ -129,29 +130,32 @@ export default function SearchBar({ root, onSelectNode }: SearchBarProps) {
         </button>
       </div>
       {results.length > 0 && (
-        <div className="mt-2 max-h-48 space-y-1 overflow-y-auto border-t border-violet-500/10 pt-2">
+        <div className="mt-2 max-h-48 space-y-1 overflow-y-auto border-t border-[var(--accent-ghost)] pt-2">
           {results.slice(0, 10).map((node) => (
             <button
               key={node.id}
               onClick={() => {
                 onSelectNode(node.id);
+                onNavigateToNode?.(node.id);
                 setIsOpen(false);
                 setQuery("");
                 setResults([]);
               }}
-              className="w-full cursor-pointer rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-violet-500/10"
+              className="w-full cursor-pointer rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--accent-ghost)]"
             >
-              <span className="text-xs font-bold text-violet-400">{node.year}</span>
-              <span className="ml-2 text-xs text-white/60">{node.title}</span>
+              <span className="text-xs font-bold text-[var(--violet-text)]">{node.year}</span>
+              <span className="ml-2 text-xs text-[var(--text-tertiary)]">{node.title}</span>
             </button>
           ))}
           {results.length > 10 && (
-            <p className="px-2 text-xs text-white/20">+{results.length - 10} more results</p>
+            <p className="px-2 text-xs text-[var(--text-ghost)]">
+              +{results.length - 10} more results
+            </p>
           )}
         </div>
       )}
       {query && results.length === 0 && (
-        <p className="mt-2 border-t border-violet-500/10 pt-2 text-xs text-white/30">
+        <p className="mt-2 border-t border-[var(--accent-ghost)] pt-2 text-xs text-[var(--text-faint)]">
           No events found
         </p>
       )}

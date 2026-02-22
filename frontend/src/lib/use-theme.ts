@@ -25,6 +25,16 @@ export function useTheme() {
     document.documentElement.classList.toggle("light", theme === "light");
   }, [theme]);
 
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === THEME_KEY && (e.newValue === "dark" || e.newValue === "light")) {
+        setThemeState(e.newValue);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setThemeState(newTheme);

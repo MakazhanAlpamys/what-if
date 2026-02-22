@@ -1,5 +1,7 @@
 import type { Node, Edge } from "@xyflow/react";
 import type { TimelineNode } from "./types";
+import { IMPACT_COLORS } from "./constants";
+import { findNodeIdsOnPath } from "./tree-utils";
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 160;
@@ -24,13 +26,12 @@ function layoutNode(
   edges: Edge[],
   expandingNodeId: string | null,
   selectedNodeId: string | null,
-  hasChildrenMap: Map<string, boolean>,
   onExpand: (nodeId: string) => void,
-  onSelect: (nodeId: string) => void
+  onSelect: (nodeId: string) => void,
+  newNodeIds?: Set<string>
 ) {
   const isRoot = parentId === null;
   const hasChildren = node.branches.length > 0;
-  hasChildrenMap.set(node.id, hasChildren);
 
   nodes.push({
     id: node.id,
@@ -43,19 +44,23 @@ function layoutNode(
       isSelected: node.id === selectedNodeId,
       isExpanding: node.id === expandingNodeId,
       hasChildren,
+      isNew: newNodeIds?.has(node.id) ?? false,
       onExpand,
       onSelect,
     },
   });
 
   if (parentId) {
+    const color = IMPACT_COLORS[node.impact];
+    const isNewEdge = newNodeIds?.has(node.id) ?? false;
     edges.push({
       id: `edge-${parentId}-${node.id}`,
       source: parentId,
       target: node.id,
       type: "smoothstep",
       animated: true,
-      style: { stroke: "rgba(139, 92, 246, 0.3)", strokeWidth: 2 },
+      style: { stroke: `${color}80`, strokeWidth: 2 },
+      className: isNewEdge ? "edge-new" : undefined,
     });
   }
 
@@ -77,9 +82,9 @@ function layoutNode(
         edges,
         expandingNodeId,
         selectedNodeId,
-        hasChildrenMap,
         onExpand,
-        onSelect
+        onSelect,
+        newNodeIds
       );
 
       startX += childWidth + H_GAP;
@@ -92,11 +97,11 @@ export function buildTreeLayout(
   expandingNodeId: string | null,
   selectedNodeId: string | null,
   onExpand: (nodeId: string) => void,
-  onSelect: (nodeId: string) => void
-): { nodes: Node[]; edges: Edge[]; hasChildrenMap: Map<string, boolean> } {
+  onSelect: (nodeId: string) => void,
+  newNodeIds?: Set<string>
+): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const hasChildrenMap = new Map<string, boolean>();
 
   layoutNode(
     root,
@@ -108,10 +113,27 @@ export function buildTreeLayout(
     edges,
     expandingNodeId,
     selectedNodeId,
-    hasChildrenMap,
     onExpand,
-    onSelect
+    onSelect,
+    newNodeIds
   );
 
-  return { nodes, edges, hasChildrenMap };
+  // Highlight path to selected node
+  if (selectedNodeId) {
+    const pathIds = findNodeIdsOnPath(root, selectedNodeId);
+    if (pathIds) {
+      for (const edge of edges) {
+        if (pathIds.has(edge.source) && pathIds.has(edge.target)) {
+          const currentStroke = (edge.style?.stroke as string) ?? "";
+          edge.style = {
+            ...edge.style,
+            strokeWidth: 3,
+            stroke: currentStroke.replace(/80$/, "cc"),
+          };
+        }
+      }
+    }
+  }
+
+  return { nodes, edges };
 }

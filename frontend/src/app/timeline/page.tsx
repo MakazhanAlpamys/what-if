@@ -9,6 +9,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   ReactFlowProvider,
   type Node,
   type Edge,
@@ -20,11 +21,23 @@ import TimelineNodeComponent from "@/components/TimelineNode";
 import DetailPanel from "@/components/DetailPanel";
 import SearchBar from "@/components/SearchBar";
 import ThemeToggle from "@/components/ThemeToggle";
+import Spinner from "@/components/Spinner";
+import ErrorIcon from "@/components/ErrorIcon";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import ToolbarMenu from "@/components/ToolbarMenu";
 import { streamGenerate, streamExpand } from "@/lib/stream";
 import { buildTreeLayout } from "@/lib/tree-layout";
 import { MAX_TREE_DEPTH } from "@/lib/constants";
-import { findNodeById, findChainToNode, addBranchesToNode, collapseNode } from "@/lib/tree-utils";
-import { saveTimeline, exportTimelineJSON, addToHistory } from "@/lib/storage";
+import {
+  findNodeById,
+  findChainToNode,
+  addBranchesToNode,
+  collapseNode,
+  collectAllNodes,
+} from "@/lib/tree-utils";
+import { saveTimeline, exportTimelineJSON, addToHistory, getTimelineById } from "@/lib/storage";
+import { generateShareURL, copyToClipboard, decodeTimeline } from "@/lib/share";
+import { exportAsPNG, exportAsSVG } from "@/lib/export-image";
 import type { ScenarioResponse } from "@/lib/types";
 
 const nodeTypes = { timelineNode: TimelineNodeComponent };
@@ -33,16 +46,23 @@ function TimelineContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const scenario = searchParams.get("q") || "";
+  const loadId = searchParams.get("load") || "";
+  const shareData = searchParams.get("share") || "";
 
   const [scenarioData, setScenarioData] = useState<ScenarioResponse | null>(null);
+  const [displayScenario, setDisplayScenario] = useState(scenario);
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [newNodeIds, setNewNodeIds] = useState<Set<string>>(new Set());
+  const [collapseConfirmNodeId, setCollapseConfirmNodeId] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const expandAbortRef = useRef<AbortController | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Undo/redo state
   const [undoStack, setUndoStack] = useState<ScenarioResponse[]>([]);
@@ -50,6 +70,8 @@ function TimelineContent() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  const { setCenter, getNode } = useReactFlow();
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -62,19 +84,19 @@ function TimelineContent() {
   }, []);
 
   const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return;
+    if (undoStack.length === 0 || !scenarioData) return;
     const prev = undoStack[undoStack.length - 1];
     setUndoStack((s) => s.slice(0, -1));
-    setRedoStack((s) => [...s, scenarioData!]);
+    setRedoStack((s) => [...s, scenarioData]);
     setScenarioData(prev);
     showToast("Undone");
   }, [undoStack, scenarioData, showToast]);
 
   const handleRedo = useCallback(() => {
-    if (redoStack.length === 0) return;
+    if (redoStack.length === 0 || !scenarioData) return;
     const next = redoStack[redoStack.length - 1];
     setRedoStack((s) => s.slice(0, -1));
-    setUndoStack((s) => [...s, scenarioData!]);
+    setUndoStack((s) => [...s, scenarioData]);
     setScenarioData(next);
     showToast("Redone");
   }, [redoStack, scenarioData, showToast]);
@@ -104,10 +126,18 @@ function TimelineContent() {
       const expandAbort = new AbortController();
       expandAbortRef.current = expandAbort;
       streamExpand(
-        scenario,
+        displayScenario,
         chain,
         () => {},
         (data) => {
+          // Track new node IDs for animation
+          const ids = new Set<string>();
+          data.branches.forEach((b) => {
+            collectAllNodes(b).forEach((n) => ids.add(n.id));
+          });
+          setNewNodeIds(ids);
+          setTimeout(() => setNewNodeIds(new Set()), 1500);
+
           setScenarioData((prev) => {
             if (!prev) return prev;
             pushUndo(prev);
@@ -128,7 +158,7 @@ function TimelineContent() {
         expandAbort.signal
       );
     },
-    [scenarioData, expandingNodeId, scenario, pushUndo, showToast]
+    [scenarioData, expandingNodeId, displayScenario, pushUndo, showToast]
   );
 
   const handleCollapse = useCallback(
@@ -144,21 +174,79 @@ function TimelineContent() {
     [scenarioData, pushUndo, showToast]
   );
 
+  const handleCollapseRequest = useCallback((nodeId: string) => {
+    setCollapseConfirmNodeId(nodeId);
+  }, []);
+
+  const handleCollapseConfirm = useCallback(() => {
+    if (collapseConfirmNodeId) {
+      handleCollapse(collapseConfirmNodeId);
+      setCollapseConfirmNodeId(null);
+    }
+  }, [collapseConfirmNodeId, handleCollapse]);
+
   const handleSelect = useCallback((nodeId: string) => {
     setSelectedNodeId((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
+  const handleNavigateToNode = useCallback(
+    (nodeId: string) => {
+      const rfNode = getNode(nodeId);
+      if (rfNode) {
+        const x = rfNode.position.x + (rfNode.measured?.width ?? 260) / 2;
+        const y = rfNode.position.y + (rfNode.measured?.height ?? 160) / 2;
+        setCenter(x, y, { zoom: 1, duration: 800 });
+      }
+    },
+    [getNode, setCenter]
+  );
+
   const handleSave = useCallback(() => {
     if (!scenarioData) return;
-    saveTimeline(scenario, scenarioData);
+    saveTimeline(displayScenario, scenarioData);
     showToast("Timeline saved!");
-  }, [scenarioData, scenario, showToast]);
+  }, [scenarioData, displayScenario, showToast]);
 
   const handleExport = useCallback(() => {
     if (!scenarioData) return;
-    exportTimelineJSON(scenarioData, scenario);
+    exportTimelineJSON(scenarioData, displayScenario);
     showToast("Exported as JSON");
-  }, [scenarioData, scenario, showToast]);
+  }, [scenarioData, displayScenario, showToast]);
+
+  const handleShare = useCallback(async () => {
+    if (!scenarioData) return;
+    const url = generateShareURL(scenarioData);
+    if (url.length > 8000) {
+      showToast("Timeline too large to share via URL. Use JSON export.");
+      return;
+    }
+    const success = await copyToClipboard(url);
+    if (success) {
+      showToast("Share link copied to clipboard!");
+    } else {
+      showToast("Could not copy link. Try JSON export.");
+    }
+  }, [scenarioData, showToast]);
+
+  const handleExportPNG = useCallback(async () => {
+    try {
+      await exportAsPNG(`what-if-${displayScenario.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "-")}`);
+      showToast("Exported as PNG");
+    } catch {
+      showToast("PNG export failed");
+    }
+    setShowExportMenu(false);
+  }, [displayScenario, showToast]);
+
+  const handleExportSVG = useCallback(async () => {
+    try {
+      await exportAsSVG(`what-if-${displayScenario.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "-")}`);
+      showToast("Exported as SVG");
+    } catch {
+      showToast("SVG export failed");
+    }
+    setShowExportMenu(false);
+  }, [displayScenario, showToast]);
 
   const startGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -186,7 +274,7 @@ function TimelineContent() {
     );
   }, [scenario]);
 
-  // Build tree layout when data or expanding state changes
+  // Build tree layout when data or state changes
   useEffect(() => {
     if (!scenarioData) return;
 
@@ -195,7 +283,8 @@ function TimelineContent() {
       expandingNodeId,
       selectedNodeId,
       handleExpand,
-      handleSelect
+      handleSelect,
+      newNodeIds
     );
 
     setNodes(layoutNodes);
@@ -204,14 +293,40 @@ function TimelineContent() {
     scenarioData,
     expandingNodeId,
     selectedNodeId,
+    newNodeIds,
     handleExpand,
     handleSelect,
     setNodes,
     setEdges,
   ]);
 
-  // Generate scenario on mount
+  // Initialize on mount: load, share, or generate
   useEffect(() => {
+    // Handle shared timeline
+    if (shareData) {
+      const decoded = decodeTimeline(shareData);
+      if (decoded) {
+        setScenarioData(decoded);
+        setDisplayScenario(decoded.scenario);
+        return;
+      }
+      setError("Failed to decode shared timeline. The link may be corrupted.");
+      return;
+    }
+
+    // Handle saved timeline loading
+    if (loadId) {
+      const saved = getTimelineById(loadId);
+      if (saved) {
+        setScenarioData(saved.data);
+        setDisplayScenario(saved.scenario);
+        return;
+      }
+      setError("Saved timeline not found. It may have been deleted.");
+      return;
+    }
+
+    // Generate new timeline
     if (!scenario) {
       router.push("/");
       return;
@@ -226,31 +341,38 @@ function TimelineContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as globalThis.Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showExportMenu]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Z - Undo
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
       }
-      // Ctrl+Shift+Z or Ctrl+Y - Redo
       if ((e.ctrlKey || e.metaKey) && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
         e.preventDefault();
         handleRedo();
       }
-      // Ctrl+S - Save
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s" && !e.shiftKey) {
         e.preventDefault();
         handleSave();
       }
-      // Ctrl+E - Export
       if ((e.ctrlKey || e.metaKey) && e.key === "e") {
         e.preventDefault();
         handleExport();
       }
-      // Escape - Deselect
-      if (e.key === "Escape" && selectedNodeId && !document.querySelector("[role='dialog']")) {
+      if (e.key === "Escape" && selectedNodeId) {
         setSelectedNodeId(null);
       }
     };
@@ -264,6 +386,56 @@ function TimelineContent() {
     return findNodeById(scenarioData.timeline, selectedNodeId);
   }, [scenarioData, selectedNodeId]);
 
+  // Icons for toolbar
+  const undoIcon = (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4"
+      />
+    </svg>
+  );
+  const redoIcon = (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4"
+      />
+    </svg>
+  );
+  const saveIcon = (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+      />
+    </svg>
+  );
+  const exportIcon = (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+      />
+    </svg>
+  );
+  const shareIcon = (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+      />
+    </svg>
+  );
+
+  const btnClass =
+    "cursor-pointer rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-30";
+
   return (
     <div
       className="relative z-10 h-screen w-screen"
@@ -271,11 +443,11 @@ function TimelineContent() {
       aria-label="Timeline visualization"
     >
       {/* Top bar */}
-      <div className="absolute top-0 right-0 left-0 z-40 flex items-center justify-between border-b border-violet-500/10 bg-[rgba(5,5,16,0.9)] px-3 py-2 backdrop-blur-xl sm:px-6 sm:py-3">
+      <div className="absolute top-0 right-0 left-0 z-40 flex items-center justify-between border-b border-[var(--accent-ghost)] bg-[var(--surface-overlay)] px-3 py-2 backdrop-blur-xl sm:px-6 sm:py-3">
         <button
           onClick={() => router.push("/")}
           aria-label="Go back to new scenario"
-          className="flex cursor-pointer items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+          className={`flex items-center gap-2 text-sm ${btnClass}`}
         >
           <svg
             className="h-4 w-4"
@@ -288,104 +460,135 @@ function TimelineContent() {
           </svg>
           <span className="hidden sm:inline">New scenario</span>
         </button>
-        <h1 className="hidden max-w-lg truncate text-sm text-white/50 italic sm:block">
-          &ldquo;{scenario}&rdquo;
+        <h1 className="hidden max-w-lg truncate text-sm text-[var(--text-tertiary)] italic sm:block">
+          &ldquo;{displayScenario}&rdquo;
         </h1>
-        <div className="flex items-center gap-1">
-          {/* Undo/Redo */}
+
+        {/* Desktop toolbar */}
+        <div className="hidden items-center gap-1 sm:flex">
           <button
             onClick={handleUndo}
             disabled={undoStack.length === 0}
             aria-label="Undo (Ctrl+Z)"
             title="Undo (Ctrl+Z)"
-            className="cursor-pointer rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+            className={btnClass}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4"
-              />
-            </svg>
+            {undoIcon}
           </button>
           <button
             onClick={handleRedo}
             disabled={redoStack.length === 0}
             aria-label="Redo (Ctrl+Shift+Z)"
             title="Redo (Ctrl+Shift+Z)"
-            className="cursor-pointer rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+            className={btnClass}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4"
-              />
-            </svg>
+            {redoIcon}
           </button>
-
-          {/* Save */}
           <button
             onClick={handleSave}
             disabled={!scenarioData}
             aria-label="Save timeline (Ctrl+S)"
             title="Save timeline (Ctrl+S)"
-            className="cursor-pointer rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+            className={btnClass}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
+            {saveIcon}
           </button>
 
-          {/* Export */}
+          {/* Export dropdown */}
+          <div ref={exportMenuRef} className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={!scenarioData}
+              aria-label="Export timeline"
+              title="Export timeline"
+              className={btnClass}
+            >
+              {exportIcon}
+            </button>
+            {showExportMenu && (
+              <div className="absolute top-full right-0 mt-1 w-36 rounded-xl border border-[var(--accent-border)] bg-[var(--surface-secondary)] py-1 shadow-xl backdrop-blur-xl">
+                <button
+                  onClick={() => {
+                    handleExport();
+                    setShowExportMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+                >
+                  Export JSON
+                </button>
+                <button
+                  onClick={handleExportPNG}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+                >
+                  Export PNG
+                </button>
+                <button
+                  onClick={handleExportSVG}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+                >
+                  Export SVG
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={handleExport}
+            onClick={handleShare}
             disabled={!scenarioData}
-            aria-label="Export as JSON (Ctrl+E)"
-            title="Export as JSON (Ctrl+E)"
-            className="cursor-pointer rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Share timeline"
+            title="Share timeline"
+            className={btnClass}
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
+            {shareIcon}
           </button>
 
-          {/* Search */}
-          <SearchBar root={scenarioData?.timeline ?? null} onSelectNode={handleSelect} />
+          <SearchBar
+            root={scenarioData?.timeline ?? null}
+            onSelectNode={handleSelect}
+            onNavigateToNode={handleNavigateToNode}
+          />
+          <ThemeToggle />
+        </div>
 
-          {/* Theme toggle */}
+        {/* Mobile toolbar */}
+        <div className="flex items-center gap-1 sm:hidden">
+          <SearchBar
+            root={scenarioData?.timeline ?? null}
+            onSelectNode={handleSelect}
+            onNavigateToNode={handleNavigateToNode}
+          />
+          <ToolbarMenu
+            actions={[
+              {
+                label: "Undo",
+                icon: undoIcon,
+                onClick: handleUndo,
+                disabled: undoStack.length === 0,
+                shortcut: "Ctrl+Z",
+              },
+              {
+                label: "Redo",
+                icon: redoIcon,
+                onClick: handleRedo,
+                disabled: redoStack.length === 0,
+                shortcut: "Ctrl+Y",
+              },
+              {
+                label: "Save",
+                icon: saveIcon,
+                onClick: handleSave,
+                disabled: !scenarioData,
+                shortcut: "Ctrl+S",
+              },
+              {
+                label: "Export JSON",
+                icon: exportIcon,
+                onClick: handleExport,
+                disabled: !scenarioData,
+              },
+              { label: "Share", icon: shareIcon, onClick: handleShare, disabled: !scenarioData },
+            ]}
+          />
           <ThemeToggle />
         </div>
       </div>
@@ -397,7 +600,7 @@ function TimelineContent() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="absolute top-16 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-violet-500/20 bg-[rgba(8,8,25,0.95)] px-4 py-2 text-sm text-white/70 shadow-xl backdrop-blur-xl"
+            className="absolute top-16 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-[var(--accent-faint)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-secondary)] shadow-xl backdrop-blur-xl"
           >
             {toast}
           </motion.div>
@@ -411,23 +614,9 @@ function TimelineContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-violet-500/20 bg-[rgba(8,8,25,0.95)] px-4 py-2 text-sm text-violet-300/70 shadow-xl backdrop-blur-xl"
+            className="absolute bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--accent-faint)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--violet-text)] shadow-xl backdrop-blur-xl"
           >
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
+            <Spinner className="h-4 w-4" />
             Exploring new branches...
           </motion.div>
         )}
@@ -440,26 +629,26 @@ function TimelineContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[rgba(5,5,16,0.95)]"
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[var(--surface-overlay)]"
           >
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              className="mb-6 h-20 w-20 rounded-full border-2 border-violet-500/20 border-t-violet-500"
+              className="mb-6 h-20 w-20 rounded-full border-2 border-[var(--accent-faint)] border-t-[var(--accent)]"
             />
-            <h2 className="mb-2 text-xl font-semibold text-white/80">
+            <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
               Creating alternate reality...
             </h2>
-            <p className="mb-6 text-sm text-white/30">
+            <p className="mb-6 text-sm text-[var(--text-faint)]">
               K2 Think V2 is reasoning through your scenario
             </p>
             {streamText && (
               <div
-                className="mx-auto max-h-48 max-w-xl overflow-y-auto rounded-xl border border-violet-500/10 bg-violet-500/5 p-4"
+                className="mx-auto max-h-48 max-w-xl overflow-y-auto rounded-xl border border-[var(--accent-ghost)] bg-[var(--accent-ghost)] p-4"
                 aria-live="polite"
               >
                 <pre
-                  className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-white/30"
+                  className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-[var(--text-faint)]"
                   aria-label="AI reasoning output"
                 >
                   {streamText.length > 800 ? `...${streamText.slice(-800)}` : streamText}
@@ -472,25 +661,15 @@ function TimelineContent() {
 
       {/* Error state */}
       {error && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[rgba(5,5,16,0.95)]">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[var(--surface-overlay)]">
           <div className="max-w-md text-center">
             <div className="mb-4 text-4xl">
-              <svg
-                className="inline h-12 w-12 text-red-400/60"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
-                />
-              </svg>
+              <ErrorIcon className="inline h-12 w-12" />
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-white/70">Failed to create reality</h2>
-            <p className="mb-6 text-sm text-white/30">{error}</p>
+            <h2 className="mb-2 text-lg font-semibold text-[var(--text-secondary)]">
+              Failed to create reality
+            </h2>
+            <p className="mb-6 text-sm text-[var(--text-faint)]">{error}</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
                 onClick={startGeneration}
@@ -500,7 +679,7 @@ function TimelineContent() {
               </button>
               <button
                 onClick={() => router.push("/")}
-                className="cursor-pointer rounded-xl border border-violet-500/20 bg-transparent px-6 py-2.5 text-sm font-medium text-white/60 transition-colors hover:border-violet-500/40 hover:text-white/80"
+                className="cursor-pointer rounded-xl border border-[var(--accent-faint)] bg-transparent px-6 py-2.5 text-sm font-medium text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-muted)] hover:text-[var(--text-secondary)]"
               >
                 Try another scenario
               </button>
@@ -528,9 +707,9 @@ function TimelineContent() {
             <Background color="rgba(139, 92, 246, 0.05)" gap={40} size={1} />
             <Controls showInteractive={false} aria-label="Map controls" />
             <MiniMap
-              nodeColor="rgba(139, 92, 246, 0.4)"
-              maskColor="rgba(5, 5, 16, 0.8)"
-              className="!rounded-xl !border !border-violet-500/15 !bg-[rgba(5,5,16,0.9)]"
+              nodeColor="var(--accent-soft, rgba(139, 92, 246, 0.4))"
+              maskColor="var(--minimap-mask, rgba(5, 5, 16, 0.8))"
+              className="!rounded-xl !border !border-[var(--accent-border)] !bg-[var(--minimap-bg)]"
               pannable
               zoomable
             />
@@ -545,7 +724,7 @@ function TimelineContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            className="fixed inset-0 z-40 bg-[var(--backdrop)] sm:hidden"
             onClick={() => setSelectedNodeId(null)}
           />
         )}
@@ -554,17 +733,27 @@ function TimelineContent() {
       <DetailPanel
         node={selectedNode}
         realHistory={scenarioData?.realHistory || ""}
-        scenario={scenario}
         onClose={() => setSelectedNodeId(null)}
         onExpand={handleExpand}
-        onCollapse={handleCollapse}
+        onCollapse={handleCollapseRequest}
         isExpanding={!!expandingNodeId}
         hasChildren={selectedNode ? selectedNode.branches.length > 0 : false}
       />
 
+      {/* Collapse confirmation */}
+      <ConfirmDialog
+        isOpen={!!collapseConfirmNodeId}
+        title="Collapse Branches?"
+        message="This will remove all sub-branches from this node. You can undo this with Ctrl+Z."
+        confirmLabel="Collapse"
+        variant="danger"
+        onConfirm={handleCollapseConfirm}
+        onCancel={() => setCollapseConfirmNodeId(null)}
+      />
+
       {/* Keyboard shortcuts help (bottom) */}
       {scenarioData && !isGenerating && (
-        <div className="absolute right-4 bottom-4 z-30 hidden text-xs text-white/15 lg:block">
+        <div className="absolute right-4 bottom-4 z-30 hidden text-xs text-[var(--text-invisible)] lg:block">
           Ctrl+F Search · Ctrl+Z Undo · Ctrl+S Save · Ctrl+E Export
         </div>
       )}
@@ -575,7 +764,7 @@ function TimelineContent() {
 function TimelineLoading() {
   return (
     <div className="relative z-10 flex h-screen w-screen items-center justify-center">
-      <div className="h-16 w-16 animate-spin rounded-full border-2 border-violet-500/20 border-t-violet-500" />
+      <div className="h-16 w-16 animate-spin rounded-full border-2 border-[var(--accent-faint)] border-t-[var(--accent)]" />
     </div>
   );
 }

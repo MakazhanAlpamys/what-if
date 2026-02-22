@@ -3,14 +3,43 @@
 :root {
   --background: #050510;
   --foreground: #e0e0ff;
-  --accent: #8b5cf6;
-  --accent-glow: #a78bfa;
-  --critical: #ef4444;
-  --high: #f97316;
-  --medium: #eab308;
-  --low: #22c55e;
   --card-bg: rgba(15, 15, 40, 0.8);
   --card-border: rgba(139, 92, 246, 0.2);
+
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --text-faint: rgba(255, 255, 255, 0.3);
+  --text-ghost: rgba(255, 255, 255, 0.2);
+  --text-invisible: rgba(255, 255, 255, 0.15);
+
+  --surface-primary: rgba(15, 15, 40, 0.9);
+  --surface-secondary: rgba(8, 8, 25, 0.95);
+  --surface-overlay: rgba(5, 5, 16, 0.95);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+
+  --accent: rgba(139, 92, 246, 1);
+  --accent-soft: rgba(139, 92, 246, 0.5);
+  --accent-muted: rgba(139, 92, 246, 0.3);
+  --accent-faint: rgba(139, 92, 246, 0.2);
+  --accent-ghost: rgba(139, 92, 246, 0.1);
+  --accent-border: rgba(139, 92, 246, 0.15);
+
+  --violet-text: rgba(167, 139, 250, 0.7);
+  --violet-text-muted: rgba(167, 139, 250, 0.6);
+  --indigo-text-muted: rgba(165, 180, 252, 0.6);
+
+  --node-bg: rgba(15, 15, 40, 0.85);
+  --node-bg-selected: rgba(20, 10, 50, 0.95);
+  --node-border: rgba(139, 92, 246, 0.15);
+  --node-border-hover: rgba(139, 92, 246, 0.3);
+  --node-border-selected: rgba(167, 139, 250, 0.6);
+
+  --minimap-bg: rgba(5, 5, 16, 0.9);
+  --minimap-mask: rgba(5, 5, 16, 0.8);
+
+  --backdrop: rgba(0, 0, 0, 0.4);
 }
 
 html.light {
@@ -18,6 +47,41 @@ html.light {
   --foreground: #1a1a2e;
   --card-bg: rgba(255, 255, 255, 0.9);
   --card-border: rgba(139, 92, 246, 0.15);
+
+  --text-primary: rgba(26, 26, 46, 0.95);
+  --text-secondary: rgba(26, 26, 46, 0.75);
+  --text-tertiary: rgba(26, 26, 46, 0.6);
+  --text-muted: rgba(26, 26, 46, 0.5);
+  --text-faint: rgba(26, 26, 46, 0.35);
+  --text-ghost: rgba(26, 26, 46, 0.25);
+  --text-invisible: rgba(26, 26, 46, 0.15);
+
+  --surface-primary: rgba(255, 255, 255, 0.95);
+  --surface-secondary: rgba(248, 246, 255, 0.98);
+  --surface-overlay: rgba(248, 246, 255, 0.97);
+  --surface-hover: rgba(139, 92, 246, 0.08);
+
+  --accent: rgba(109, 62, 216, 1);
+  --accent-soft: rgba(109, 62, 216, 0.5);
+  --accent-muted: rgba(109, 62, 216, 0.3);
+  --accent-faint: rgba(109, 62, 216, 0.2);
+  --accent-ghost: rgba(109, 62, 216, 0.08);
+  --accent-border: rgba(109, 62, 216, 0.15);
+
+  --violet-text: rgba(109, 62, 216, 0.8);
+  --violet-text-muted: rgba(109, 62, 216, 0.65);
+  --indigo-text-muted: rgba(79, 70, 229, 0.65);
+
+  --node-bg: rgba(255, 255, 255, 0.9);
+  --node-bg-selected: rgba(245, 240, 255, 0.95);
+  --node-border: rgba(139, 92, 246, 0.15);
+  --node-border-hover: rgba(139, 92, 246, 0.35);
+  --node-border-selected: rgba(109, 62, 216, 0.6);
+
+  --minimap-bg: rgba(248, 246, 255, 0.9);
+  --minimap-mask: rgba(248, 246, 255, 0.8);
+
+  --backdrop: rgba(0, 0, 0, 0.25);
 }
 
 @theme inline {
@@ -31,45 +95,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
-
-/* Starfield background */
-.starfield {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.starfield::before,
-.starfield::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(2px 2px at 20px 30px, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(2px 2px at 40px 70px, rgba(200, 200, 255, 0.5), transparent),
-    radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1px 1px at 130px 80px, rgba(200, 200, 255, 0.4), transparent),
-    radial-gradient(2px 2px at 160px 30px, rgba(255, 255, 255, 0.5), transparent);
-  background-size: 200px 100px;
-  animation: twinkle 4s ease-in-out infinite alternate;
-}
-
-.starfield::after {
-  background-size: 300px 150px;
-  animation-delay: 2s;
-  opacity: 0.5;
-}
-
-@keyframes twinkle {
-  0% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
 }
 
 /* Portal glow effect */
@@ -96,9 +121,20 @@ body {
   background: var(--background) !important;
 }
 
-.react-flow__edge-path {
-  stroke: rgba(139, 92, 246, 0.4) !important;
-  stroke-width: 2 !important;
+/* Edge animation for newly added branches */
+@keyframes edgeFadeIn {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 100;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+.edge-new .react-flow__edge-path {
+  animation: edgeFadeIn 0.8s ease-out forwards;
 }
 
 .react-flow__controls {
@@ -134,32 +170,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.5);
-}
-
-/* Light mode overrides */
-html.light body {
-  background: var(--background);
-  color: var(--foreground);
-}
-
-html.light .starfield {
-  opacity: 0.15;
-}
-
-html.light .react-flow__background {
-  background: var(--background) !important;
-}
-
-html.light .react-flow__controls {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border-color: rgba(139, 92, 246, 0.15) !important;
-}
-
-html.light .react-flow__controls-button {
-  fill: var(--foreground) !important;
-  border-bottom-color: rgba(139, 92, 246, 0.1) !important;
-}
-
-html.light .react-flow__minimap {
-  background: rgba(248, 246, 255, 0.9) !important;
 }

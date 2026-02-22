@@ -14,19 +14,23 @@ type TimelineNodeData = {
   isSelected: boolean;
   isExpanding: boolean;
   hasChildren: boolean;
+  isNew: boolean;
   onExpand: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
 };
 
 function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData }) {
-  const { timelineNode, isRoot, isSelected, isExpanding, hasChildren, onExpand, onSelect } = data;
+  const { timelineNode, isRoot, isSelected, isExpanding, hasChildren, isNew, onExpand, onSelect } =
+    data;
   const color = IMPACT_COLORS[timelineNode.impact];
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
+      initial={isNew ? { opacity: 0, scale: 0.3, y: -30 } : { opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={
+        isNew ? { duration: 0.6, type: "spring", damping: 15, stiffness: 150 } : { duration: 0.4 }
+      }
       onClick={() => onSelect(timelineNode.id)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -44,15 +48,17 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
         <Handle
           type="target"
           position={Position.Top}
-          className="!h-2 !w-2 !border-none !bg-violet-500/50"
+          className="!h-2 !w-2 !border-none !bg-[var(--accent-soft)]"
         />
       )}
 
       <div
-        className={`rounded-xl border p-4 backdrop-blur-sm transition-all ${
+        className={`rounded-xl border p-3 backdrop-blur-sm transition-all sm:p-4 ${
+          isExpanding ? "animate-pulse ring-2 ring-violet-500/40" : ""
+        } ${
           isSelected
-            ? "border-violet-400/60 bg-[rgba(20,10,50,0.95)] shadow-lg shadow-violet-500/20"
-            : "border-violet-500/15 bg-[rgba(15,15,40,0.85)] hover:border-violet-500/30"
+            ? "border-[var(--node-border-selected)] bg-[var(--node-bg-selected)] shadow-lg shadow-violet-500/20"
+            : "border-[var(--node-border)] bg-[var(--node-bg)] hover:border-[var(--node-border-hover)]"
         }`}
       >
         {/* Year badge */}
@@ -72,12 +78,12 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
         </div>
 
         {/* Title */}
-        <h3 className="mb-1 text-sm leading-tight font-semibold text-white">
+        <h3 className="mb-1 text-sm leading-tight font-semibold text-[var(--text-primary)]">
           {timelineNode.title}
         </h3>
 
         {/* Description (truncated) */}
-        <p className="line-clamp-2 text-xs leading-relaxed text-white/40">
+        <p className="line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
           {timelineNode.description}
         </p>
 
@@ -89,7 +95,7 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
               onExpand(timelineNode.id);
             }}
             disabled={isExpanding}
-            className="mt-3 w-full cursor-pointer rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 transition-all hover:border-violet-500/40 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-3 w-full cursor-pointer rounded-lg border border-[var(--accent-faint)] bg-[var(--accent-ghost)] px-3 py-2 text-xs font-medium text-[var(--violet-text)] transition-all hover:border-[var(--accent-muted)] hover:bg-[var(--accent-faint)] disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5"
           >
             {isExpanding ? (
               <span className="flex items-center justify-center gap-1.5">
@@ -106,7 +112,7 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!h-2 !w-2 !border-none !bg-violet-500/50"
+        className="!h-2 !w-2 !border-none !bg-[var(--accent-soft)]"
       />
     </motion.div>
   );
