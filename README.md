@@ -15,18 +15,25 @@ Enter a historical what-if scenario and watch branching timelines of consequence
 2. **AI generates a timeline tree** — K2 Think V2 reasons through cause-and-effect chains and produces branching consequences
 3. **Explore interactively** — Click nodes to see details, expand branches to go deeper (up to 5 levels)
 4. **Compare with reality** — Each scenario includes what actually happened in real history
-5. **Save & export** — Save timelines to localStorage or export as JSON
-6. **Search & navigate** — Search timeline events with Ctrl+F, undo/redo changes
+5. **Detect paradoxes** — AI analyzes your timeline for logical contradictions and impossible sequences
+6. **Save & share** — Save timelines, export as JSON/PNG/SVG, or share via URL
+7. **Search & navigate** — Search timeline events with Ctrl+F, undo/redo changes
 
 ## Features
 
 - **Branching timeline tree** — Interactive visualization with zoom, pan, and minimap
 - **Real-time AI streaming** — SSE streaming shows the timeline as it generates
+- **Paradox detection** — AI-powered analysis of logical contradictions in alternate timelines
+- **Sound system** — Ambient audio, click sounds, whoosh effects, portal tones, TTS read-aloud
+- **Image export** — Export timeline as PNG or SVG
+- **Timeline sharing** — Compress and share timelines via URL (lz-string encoding)
 - **Dark / light theme** — Toggle between themes, persisted in localStorage
+- **Starfield background** — Canvas-based parallax animation with mouse tracking
 - **Timeline search** — Filter nodes by keyword with Ctrl+F
 - **Undo / redo** — Full undo/redo stack for branch expansions and collapses
-- **Save & export** — Save timelines to localStorage, export as JSON
+- **Save & export** — Save timelines to localStorage, export as JSON/PNG/SVG
 - **Scenario history** — Previously explored scenarios shown on the home page
+- **Mobile-optimized** — Responsive toolbar menu for smaller screens
 - **Keyboard shortcuts** — Ctrl+F (search), Ctrl+Z (undo), Ctrl+Shift+Z / Ctrl+Y (redo), Ctrl+S (save), Ctrl+E (export), Escape (close panels)
 
 ## Architecture
@@ -41,40 +48,52 @@ All application code lives in [`frontend/`](frontend/). There is no separate bac
 
 ```
 what-if/
-├── .github/workflows/ci.yml   # CI pipeline (lint, format, typecheck, test, build)
-├── CLAUDE.md                   # AI assistant guidance
+├── .claude/                        # Claude Code settings (permissions)
+├── .github/workflows/ci.yml       # CI pipeline (lint, format, typecheck, test, build)
+├── CLAUDE.md                       # AI assistant guidance
 ├── frontend/
-│   ├── .env.example            # Required environment variables template
-│   ├── next.config.ts          # Next.js config (React Compiler, security headers, CSP)
+│   ├── .env.example                # Required environment variables template
+│   ├── next.config.ts              # Next.js config (React Compiler, security headers, CSP)
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── page.tsx              # Home — scenario input
-│   │   │   ├── timeline/page.tsx     # Timeline — interactive tree visualization
-│   │   │   ├── api/generate/route.ts # POST — generate initial timeline (SSE)
-│   │   │   ├── api/expand/route.ts   # POST — expand a branch deeper (SSE)
-│   │   │   ├── not-found.tsx         # Custom 404
-│   │   │   └── global-error.tsx      # Global error boundary
+│   │   │   ├── page.tsx                  # Home — scenario input
+│   │   │   ├── timeline/page.tsx         # Timeline — interactive tree visualization
+│   │   │   ├── api/generate/route.ts     # POST — generate initial timeline (SSE)
+│   │   │   ├── api/expand/route.ts       # POST — expand a branch deeper (SSE)
+│   │   │   ├── api/paradox/route.ts      # POST — detect paradoxes in timeline
+│   │   │   ├── not-found.tsx             # Custom 404
+│   │   │   └── global-error.tsx          # Global error boundary
 │   │   ├── components/
-│   │   │   ├── TimelineNode.tsx  # Custom React Flow node
-│   │   │   ├── DetailPanel.tsx   # Side panel with event details
-│   │   │   ├── SearchBar.tsx     # Timeline search with Ctrl+F
-│   │   │   ├── ThemeToggle.tsx   # Dark/light mode toggle
-│   │   │   ├── ErrorBoundary.tsx # React error boundary
-│   │   │   └── Spinner.tsx       # Shared loading spinner
+│   │   │   ├── TimelineNode.tsx      # Custom React Flow node with particle burst
+│   │   │   ├── DetailPanel.tsx       # Side panel with event details + TTS
+│   │   │   ├── SearchBar.tsx         # Timeline search with Ctrl+F
+│   │   │   ├── SavedTimelinesModal.tsx # Load/delete saved timelines
+│   │   │   ├── SoundToggle.tsx       # Mute/unmute sound system
+│   │   │   ├── ToolbarMenu.tsx       # Responsive mobile toolbar menu
+│   │   │   ├── ConfirmDialog.tsx     # Reusable confirmation modal
+│   │   │   ├── Starfield.tsx         # Canvas parallax starfield background
+│   │   │   ├── ThemeToggle.tsx       # Dark/light mode toggle
+│   │   │   ├── ErrorBoundary.tsx     # React error boundary
+│   │   │   ├── ErrorIcon.tsx         # SVG error icon
+│   │   │   └── Spinner.tsx           # Shared loading spinner
 │   │   └── lib/
-│   │       ├── types.ts          # Core types (TimelineNode, ScenarioResponse, ExpandResponse)
-│   │       ├── stream.ts         # Client-side SSE handlers + extractJSON parser
-│   │       ├── sse.ts            # Server-side SSE streaming helper
-│   │       ├── tree-layout.ts    # Recursive tree → React Flow layout
-│   │       ├── tree-utils.ts     # Tree manipulation (find, expand, collapse)
-│   │       ├── storage.ts        # localStorage persistence + JSON export
-│   │       ├── validate.ts       # Runtime type guards for K2 responses
-│   │       ├── rate-limit.ts     # In-memory rate limiter
-│   │       ├── use-theme.ts      # Dark/light theme hook
-│   │       └── constants.ts      # Impact colors/labels, MAX_TREE_DEPTH
+│   │       ├── types.ts              # Core types (TimelineNode, Paradox, responses)
+│   │       ├── stream.ts             # Client-side SSE handlers + extractJSON
+│   │       ├── sse.ts                # Server-side SSE streaming helper
+│   │       ├── k2-api.ts             # K2 API abstraction (config, validation, fetch)
+│   │       ├── tree-layout.ts        # Recursive tree → React Flow layout
+│   │       ├── tree-utils.ts         # Tree manipulation (find, expand, collapse)
+│   │       ├── storage.ts            # localStorage persistence + JSON export
+│   │       ├── export-image.ts       # PNG/SVG export via html-to-image
+│   │       ├── share.ts              # Timeline compression/sharing (lz-string)
+│   │       ├── sounds.ts             # Web Audio API sound manager + TTS
+│   │       ├── validate.ts           # Runtime type guards for K2 responses
+│   │       ├── rate-limit.ts         # In-memory rate limiter
+│   │       ├── use-theme.ts          # Dark/light theme hook
+│   │       └── constants.ts          # Impact colors/labels, MAX_TREE_DEPTH
 │   └── public/
 │       └── favicon.svg
-└── README.md                   # ← You are here
+└── README.md                       # ← You are here
 ```
 
 ## Quick Start
@@ -125,15 +144,17 @@ npm test           # Run tests (Vitest)
 | Visualization   | @xyflow/react (React Flow)     | Interactive tree with zoom/pan            |
 | Animation       | Framer Motion                  | Smooth transitions, node appearance       |
 | Styling         | Tailwind CSS 4                 | Dark cosmic theme                         |
+| Export          | html-to-image                  | PNG/SVG timeline export                   |
+| Sharing         | lz-string                      | Timeline compression for URL sharing      |
 | AI Model        | K2 Think V2                    | Chain-of-thought reasoning, structured JSON |
-| Testing         | Vitest                         | 51 tests across 7 test files              |
+| Testing         | Vitest                         | 54 tests across 7 test files              |
 | Code Quality    | ESLint 9 + Prettier            | Flat config, Tailwind plugin              |
 | Git Hooks       | Husky + lint-staged            | Pre-commit lint & format                  |
 | CI              | GitHub Actions                 | Lint → format → typecheck → test → build  |
 
 ## Security
 
-- **Rate limiting** — 10 req/min (generate), 20 req/min (expand) per IP
+- **Rate limiting** — 10 req/min (generate), 20 req/min (expand), 5 req/min (paradox) per IP
 - **Input validation** — Scenario max 2000 chars; chain array validated for structure and depth (max 20)
 - **Security headers** — CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
 - **API key protection** — Server-side only via `.env.local`, never exposed to client
@@ -145,19 +166,19 @@ npm test           # Run tests (Vitest)
 
 ```bash
 cd frontend
-npx vitest run           # 51 tests
+npx vitest run           # 54 tests
 npx tsc --noEmit         # Type check
 npx prettier --check .   # Format check
 ```
 
 | Test File              | What it covers                                                | Tests |
 | ---------------------- | ------------------------------------------------------------- | ----- |
-| `validate.test.ts`     | Type guards for ScenarioResponse & ExpandResponse             | 10    |
+| `validate.test.ts`     | Type guards for ScenarioResponse, ExpandResponse, Paradox     | 10    |
 | `stream.test.ts`       | `extractJSON` — direct JSON, `<think>` blocks, markdown fences, brace scanning | 13    |
 | `tree-utils.test.ts`   | Tree manipulation: find, chain, expand, collapse, collect     | 11    |
+| `tree-layout.test.ts`  | Tree layout algorithm, edge generation, selected state        | 7     |
 | `sse.test.ts`          | SSE stream forwarding, malformed chunk handling               | 6     |
 | `storage.test.ts`      | localStorage persistence, history, JSON export                | 4     |
-| `tree-layout.test.ts`  | Tree layout algorithm, edge generation, selected state        | 4     |
 | `rate-limit.test.ts`   | Rate limiter allow/block/remaining behavior                   | 3     |
 
 ## Core Data Model
@@ -173,11 +194,19 @@ interface TimelineNode {
   impact: "critical" | "high" | "medium" | "low";
   branches: TimelineNode[];
 }
+
+interface Paradox {
+  id: string;
+  nodeIds: string[];
+  description: string;
+  severity: "critical" | "minor";
+}
 ```
 
-The K2 model returns two response types:
+The K2 model returns three response types:
 - **ScenarioResponse** — `{ scenario, realHistory, timeline: TimelineNode }`
 - **ExpandResponse** — `{ branches: TimelineNode[] }`
+- **ParadoxResponse** — `{ paradoxes: Paradox[] }`
 
 ## CI/CD
 

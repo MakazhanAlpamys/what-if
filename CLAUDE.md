@@ -34,22 +34,32 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 - `frontend/src/app/not-found.tsx` — Custom 404 page
 - `frontend/src/app/global-error.tsx` — Custom error page
 - `frontend/src/components/` — React components:
-  - `TimelineNode.tsx` — React Flow custom node for timeline events
-  - `DetailPanel.tsx` — Slide-in panel with event details, expand/collapse controls
-  - `ErrorBoundary.tsx` — Global error boundary (sanitized error messages)
-  - `Spinner.tsx` — Reusable loading spinner
-  - `ThemeToggle.tsx` — Dark/light mode toggle button
+  - `TimelineNode.tsx` — React Flow custom node with particle burst animation, paradox indicator
+  - `DetailPanel.tsx` — Slide-in panel with event details, expand/collapse controls, TTS read-aloud
   - `SearchBar.tsx` — Timeline search with Ctrl+F shortcut
+  - `SavedTimelinesModal.tsx` — Modal for loading/deleting saved timelines from localStorage
+  - `SoundToggle.tsx` — Mute/unmute toggle for sound system
+  - `ToolbarMenu.tsx` — Responsive mobile dropdown menu for toolbar actions
+  - `ConfirmDialog.tsx` — Reusable confirmation modal (danger/default variants)
+  - `Starfield.tsx` — Canvas-based parallax starfield background with mouse tracking
+  - `ThemeToggle.tsx` — Dark/light mode toggle button
+  - `ErrorBoundary.tsx` — Global error boundary (sanitized error messages)
+  - `ErrorIcon.tsx` — SVG error/warning icon component
+  - `Spinner.tsx` — Reusable loading spinner
 - `frontend/src/lib/` — Shared utilities:
-  - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`)
+  - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`, `Paradox`, `ParadoxResponse`)
   - `stream.ts` — Client-side SSE stream handlers using shared `streamSSE()` helper with `AbortSignal` support, and `extractJSON` parser for K2 output
   - `tree-layout.ts` — Recursive tree → React Flow layout algorithm
   - `tree-utils.ts` — Tree manipulation utilities (`findNodeById`, `findChainToNode`, `addBranchesToNode`, `collapseNode`, `collectAllNodes`)
   - `sse.ts` — Shared server-side SSE streaming helper for API routes
+  - `k2-api.ts` — K2 API abstraction (`getClientIP`, `getK2Config`, `validateScenario`, `fetchFromK2`, `streamFromK2`)
   - `rate-limit.ts` — In-memory rate limiter for API routes (with serverless caveats documented)
-  - `validate.ts` — Runtime type guards for K2 API responses
+  - `validate.ts` — Runtime type guards for K2 API responses (including paradox validation)
   - `constants.ts` — Shared constants (`IMPACT_COLORS`, `IMPACT_LABELS`, `MAX_TREE_DEPTH`)
   - `storage.ts` — localStorage persistence (save timelines, scenario history, JSON export)
+  - `export-image.ts` — PNG/SVG export via `html-to-image` (2x pixel ratio, filters UI controls)
+  - `share.ts` — Timeline compression/sharing with `lz-string` (encode, decode, generate share URL, clipboard)
+  - `sounds.ts` — Web Audio API sound manager (ambient drone, click, whoosh, portal, success, error, paradox, TTS)
   - `use-theme.ts` — Dark/light theme hook with localStorage persistence
 
 ### Data flow
@@ -63,11 +73,17 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 7. Clicking a node opens DetailPanel; "Explore deeper" triggers `streamExpand()` → `/api/expand` to generate sub-branches
 8. "Collapse branches" removes sub-branches from a node (with undo support)
 9. Tree expansion is limited to `MAX_TREE_DEPTH` (5) levels to prevent performance issues
-10. Timeline can be saved to localStorage, exported as JSON, and searched with Ctrl+F
+10. Timeline can be saved to localStorage, exported as JSON/PNG/SVG, shared via URL, and searched with Ctrl+F
+11. Paradox detection (`/api/paradox`) analyzes timelines for logical contradictions (cause-effect violations, temporal impossibilities)
+12. Sound manager provides audio feedback: ambient drone, click sounds, whoosh for new branches, portal/success/error/paradox tones, TTS read-aloud
 
-### Core data type
+### Core data types
 
-`TimelineNode` is a recursive tree: each node has `id`, `year`, `title`, `description`, `impact` (critical/high/medium/low), and `branches: TimelineNode[]`. The two API response types are `ScenarioResponse` (wraps root timeline + realHistory) and `ExpandResponse` (new branches array).
+`TimelineNode` is a recursive tree: each node has `id`, `year`, `title`, `description`, `impact` (critical/high/medium/low), and `branches: TimelineNode[]`. The API response types are:
+- `ScenarioResponse` — wraps root timeline + realHistory
+- `ExpandResponse` — new branches array
+- `Paradox` — `id`, `nodeIds[]`, `description`, `severity` (critical/minor)
+- `ParadoxResponse` — `{ paradoxes: Paradox[] }`
 
 ### SSE streaming pattern
 
@@ -75,7 +91,7 @@ Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream
 
 ### Security
 
-- **Rate limiting**: Both API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand. Rate limit responses include `retryAfter` for client feedback. Note: in-memory store resets on serverless cold starts — consider Redis/Upstash for production.
+- **Rate limiting**: API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand, 5 req/min for paradox. Rate limit responses include `retryAfter` for client feedback. Note: in-memory store resets on serverless cold starts — consider Redis/Upstash for production.
 - **IP extraction**: Uses first entry from `x-forwarded-for` (split on comma) to mitigate IP spoofing via proxy chains.
 - **Input validation**: Scenario max length 2000 chars (with client-side counter); chain array validated for structure and max depth 20
 - **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy (without `unsafe-eval`) configured in `next.config.ts`
@@ -101,6 +117,8 @@ Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream
 - **@xyflow/react** (React Flow) for interactive tree visualization with MiniMap
 - **Framer Motion** for animations
 - **Tailwind CSS 4** via `@tailwindcss/postcss`
+- **html-to-image** for PNG/SVG export of timelines
+- **lz-string** for timeline compression/sharing via URL
 - **K2 Think V2** (`MBZUAI-IFM/K2-Think-v2`) as the AI reasoning model
 - **Vitest** for testing
 - **Prettier** (with `prettier-plugin-tailwindcss`) for formatting
@@ -116,10 +134,10 @@ Required in `frontend/.env.local` (see `.env.example` for template):
 
 ## Testing
 
-Tests live alongside source files as `*.test.ts`. Current test coverage:
+Tests live alongside source files as `*.test.ts`. Current test coverage (54 tests):
 - `lib/validate.test.ts` — Type guard validation (10 tests)
 - `lib/rate-limit.test.ts` — Rate limiter behavior (3 tests)
-- `lib/tree-layout.test.ts` — Tree layout algorithm (4 tests)
+- `lib/tree-layout.test.ts` — Tree layout algorithm (7 tests)
 - `lib/stream.test.ts` — `extractJSON` parser: direct JSON, `<think>` blocks, markdown fences, brace scanning (13 tests)
 - `lib/sse.test.ts` — SSE stream forwarding, malformed chunk handling (6 tests)
 - `lib/tree-utils.test.ts` — Tree manipulation: findNodeById, findChainToNode, addBranchesToNode, collectAllNodes, collapseNode (11 tests)
