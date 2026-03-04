@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-"What If...? Heritage" — an interactive alternate history simulator styled after Marvel's "What If...?". Users input a historical "what-if" scenario, and the K2 Think V2 reasoning model generates branching consequence trees visualized as an interactive timeline.
+"What If...? Heritage" — an interactive alternate history simulator styled after Marvel's "What If...?". Users input a historical "what-if" scenario, and the K2 Think V2 reasoning model generates branching consequence trees visualized as an interactive timeline. The app features 6 game modes beyond free exploration: Butterfly Effect, History Detective, Fix History, Reality vs Alternative, World Map, and Timeline Editor.
 
 ## Commands
 
@@ -20,6 +20,12 @@ npx prettier --check .  # Format check
 npx tsc --noEmit        # Type check
 ```
 
+Docker:
+```bash
+docker compose up        # Start with Docker (from repo root)
+docker compose up --build  # Rebuild and start
+```
+
 ## Architecture
 
 ```
@@ -31,8 +37,27 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
 ### Key directories
 
 - `frontend/src/app/` — Pages and API routes (Next.js App Router)
-- `frontend/src/app/not-found.tsx` — Custom 404 page
-- `frontend/src/app/global-error.tsx` — Custom error page
+  - `page.tsx` — Home page with scenario input + game mode selector
+  - `timeline/page.tsx` — Free exploration timeline visualization
+  - `butterfly/page.tsx` — Butterfly Effect game mode
+  - `detective/page.tsx` — History Detective game mode
+  - `fix-history/page.tsx` — Fix History game mode
+  - `compare/page.tsx` — Reality vs Alternative split-screen
+  - `map/page.tsx` — World Map geographic visualization
+  - `editor/page.tsx` — Timeline Editor (user-built timelines)
+  - `not-found.tsx` — Custom 404 page
+  - `global-error.tsx` — Custom error page
+- `frontend/src/app/api/` — API routes:
+  - `generate/route.ts` — Generate initial timeline (SSE streaming)
+  - `expand/route.ts` — Expand a branch deeper (SSE streaming)
+  - `paradox/route.ts` — Detect paradoxes (non-streaming)
+  - `butterfly/generate/route.ts` — Generate butterfly cascade (SSE)
+  - `detective/generate/route.ts` — Generate detective puzzle (SSE)
+  - `detective/check/route.ts` — Evaluate detective guess (non-streaming)
+  - `fix-history/generate/route.ts` — Generate dystopian timeline (SSE)
+  - `fix-history/evaluate/route.ts` — Evaluate fix attempt (non-streaming)
+  - `compare/generate/route.ts` — Generate dual timelines (SSE)
+  - `editor/critique/route.ts` — AI critique of user timeline (non-streaming)
 - `frontend/src/components/` — React components:
   - `TimelineNode.tsx` — React Flow custom node with particle burst animation, paradox indicator
   - `DetailPanel.tsx` — Slide-in panel with event details, expand/collapse controls, TTS read-aloud
@@ -47,58 +72,77 @@ User → Next.js Frontend (React Flow tree) → Next.js API Routes → K2 Think 
   - `ErrorIcon.tsx` — SVG error/warning icon component
   - `Spinner.tsx` — Reusable loading spinner
 - `frontend/src/lib/` — Shared utilities:
-  - `types.ts` — Core types (`TimelineNode`, `ScenarioResponse`, `ExpandResponse`, `Paradox`, `ParadoxResponse`)
-  - `stream.ts` — Client-side SSE stream handlers using shared `streamSSE()` helper with `AbortSignal` support, and `extractJSON` parser for K2 output
+  - `types.ts` — Core types + game mode types (see Core data types below)
+  - `stream.ts` — Client-side SSE stream handlers for explore mode (`streamGenerate`, `streamExpand`)
+  - `game-stream.ts` — Client-side SSE handlers for game modes (`streamButterfly`, `streamDetective`, `streamFixHistory`, `streamCompare`)
   - `tree-layout.ts` — Recursive tree → React Flow layout algorithm
   - `tree-utils.ts` — Tree manipulation utilities (`findNodeById`, `findChainToNode`, `addBranchesToNode`, `collapseNode`, `collectAllNodes`)
   - `sse.ts` — Shared server-side SSE streaming helper for API routes
   - `k2-api.ts` — K2 API abstraction (`getClientIP`, `getK2Config`, `validateScenario`, `fetchFromK2`, `streamFromK2`)
-  - `rate-limit.ts` — In-memory rate limiter for API routes (with serverless caveats documented)
-  - `validate.ts` — Runtime type guards for K2 API responses (including paradox validation)
+  - `rate-limit.ts` — In-memory rate limiter for API routes
+  - `validate.ts` — Runtime type guards for core K2 API responses
+  - `game-validate.ts` — Runtime type guards for game mode responses
   - `constants.ts` — Shared constants (`IMPACT_COLORS`, `IMPACT_LABELS`, `MAX_TREE_DEPTH`)
   - `storage.ts` — localStorage persistence (save timelines, scenario history, JSON export)
-  - `export-image.ts` — PNG/SVG export via `html-to-image` (2x pixel ratio, filters UI controls)
-  - `share.ts` — Timeline compression/sharing with `lz-string` (encode, decode, generate share URL, clipboard)
+  - `game-storage.ts` — Game mode leaderboard persistence (butterfly/detective/fix-history scores)
+  - `export-image.ts` — PNG/SVG export via `html-to-image`
+  - `share.ts` — Timeline compression/sharing with `lz-string`
   - `sounds.ts` — Web Audio API sound manager (ambient drone, click, whoosh, portal, success, error, paradox, TTS)
   - `use-theme.ts` — Dark/light theme hook with localStorage persistence
 
+### Game Modes
+
+1. **Free Explore** (`/timeline?q=...`) — Original mode. Generate and explore branching timelines freely.
+2. **Butterfly Effect** (`/butterfly?q=...`) — Enter a tiny change, AI maximizes cascade. Score = critical×20 + high×10 + medium×5. Leaderboard in localStorage.
+3. **History Detective** (`/detective`) — AI generates a puzzle: shows final outcome, player guesses the cause. 3 hints available (-20 pts each). AI evaluates guess similarity (0-100).
+4. **Fix History** (`/fix-history`) — AI generates dystopian timeline with one "wrong turn". Player clicks nodes to find and cut the bad branch in limited moves.
+5. **Reality vs Alternative** (`/compare?q=...`) — Split-screen dual React Flow instances showing real vs alternate history with divergence/convergence points.
+6. **World Map** (`/map?q=...`) — SVG world map with regions highlighted by event impact. Toggle between map and tree view. Region inference from event text.
+7. **Timeline Editor** (`/editor`) — User builds timeline manually (add/edit/delete nodes). AI critique via `/api/editor/critique` scores plausibility (0-100) with specific issues.
+
 ### Data flow
 
-1. Home page (`app/page.tsx`) takes scenario input (with character counter, history, auto-submit examples), routes to `/timeline?q=<scenario>`
-2. Timeline page (`app/timeline/page.tsx`) calls `streamGenerate()` which POSTs to `/api/generate`
-3. API route streams SSE from K2 Think V2 with a system prompt enforcing structured JSON output
+1. Home page (`app/page.tsx`) takes scenario input + game mode selection via expandable card grid
+2. Each mode routes to its own page: `/timeline`, `/butterfly`, `/detective`, `/fix-history`, `/compare`, `/map`, `/editor`
+3. API routes stream SSE from K2 Think V2 with mode-specific system prompts enforcing structured JSON output
 4. Client collects streamed text, extracts JSON via regex fallback (model may wrap in markdown/thinking)
-5. Response is validated with `isScenarioResponse()` / `isExpandResponse()` type guards
+5. Response is validated with mode-specific type guards (`isScenarioResponse`, `isButterflyResponse`, etc.)
 6. `buildTreeLayout()` converts the recursive `TimelineNode` tree into React Flow nodes/edges
-7. Clicking a node opens DetailPanel; "Explore deeper" triggers `streamExpand()` → `/api/expand` to generate sub-branches
-8. "Collapse branches" removes sub-branches from a node (with undo support)
-9. Tree expansion is limited to `MAX_TREE_DEPTH` (5) levels to prevent performance issues
-10. Timeline can be saved to localStorage, exported as JSON/PNG/SVG, shared via URL, and searched with Ctrl+F
-11. Paradox detection (`/api/paradox`) analyzes timelines for logical contradictions (cause-effect violations, temporal impossibilities)
-12. Sound manager provides audio feedback: ambient drone, click sounds, whoosh for new branches, portal/success/error/paradox tones, TTS read-aloud
+7. Game-specific interactions: scoring, hints, move counting, split-screen, map visualization, manual editing
 
 ### Core data types
 
-`TimelineNode` is a recursive tree: each node has `id`, `year`, `title`, `description`, `impact` (critical/high/medium/low), and `branches: TimelineNode[]`. The API response types are:
-- `ScenarioResponse` — wraps root timeline + realHistory
-- `ExpandResponse` — new branches array
-- `Paradox` — `id`, `nodeIds[]`, `description`, `severity` (critical/minor)
+`TimelineNode` is a recursive tree: each node has `id`, `year`, `title`, `description`, `impact` (critical/high/medium/low), `branches: TimelineNode[]`, and optional `region: string`.
+
+Core response types:
+- `ScenarioResponse` — `{ scenario, realHistory, timeline }`
+- `ExpandResponse` — `{ branches: TimelineNode[] }`
 - `ParadoxResponse` — `{ paradoxes: Paradox[] }`
+
+Game mode response types:
+- `ButterflyResponse` — `{ scenario, smallChange, timeline, butterflyScore }`
+- `DetectiveResponse` — `{ finalOutcome, finalYear, correctAnswer, hints[], fullTimeline, difficulty }`
+- `DetectiveCheckResponse` — `{ score, isCorrect, feedback, correctAnswer }`
+- `FixHistoryResponse` — `{ scenario, dystopianTimeline, correctNodeId, idealOutcome, maxMoves }`
+- `CompareResponse` — `{ scenario, realTimeline, altTimeline, divergencePoints[], convergencePoints[] }`
+- `EditorCritiqueResponse` — `{ overall, score, issues[], suggestions[] }`
+
+Score types (localStorage): `ButterflyScore`, `DetectiveScore`, `FixHistoryScore`
 
 ### SSE streaming pattern
 
-Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream()` helper from `lib/sse.ts`. It reads K2's SSE response, extracts content deltas, and forwards them to the client. The client-side `stream.ts` uses a shared `streamSSE()` generic helper (deduplicated from the previous separate implementations). Both `streamGenerate` and `streamExpand` accept an optional `AbortSignal` for cancellation — the timeline page uses `AbortController` to cancel in-flight requests on unmount.
+All streaming API routes use the shared `createSSEStream()` helper from `lib/sse.ts`. Client-side uses `streamSSE()` generic helpers in `stream.ts` (explore mode) and `game-stream.ts` (game modes). All accept optional `AbortSignal` for cancellation.
 
 ### Security
 
-- **Rate limiting**: API routes use in-memory rate limiting (`lib/rate-limit.ts`): 10 req/min for generate, 20 req/min for expand, 5 req/min for paradox. Rate limit responses include `retryAfter` for client feedback. Note: in-memory store resets on serverless cold starts — consider Redis/Upstash for production.
-- **IP extraction**: Uses first entry from `x-forwarded-for` (split on comma) to mitigate IP spoofing via proxy chains.
-- **Input validation**: Scenario max length 2000 chars (with client-side counter); chain array validated for structure and max depth 20
-- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy (without `unsafe-eval`) configured in `next.config.ts`
-- **Response validation**: K2 responses are validated with runtime type guards before use
+- **Rate limiting**: 10 req/min for generate/butterfly/detective/fix-history/compare, 20 req/min for expand/detective-check/fix-eval, 5 req/min for paradox/editor-critique. In-memory store resets on serverless cold starts.
+- **IP extraction**: Uses first entry from `x-forwarded-for` (split on comma)
+- **Input validation**: Scenario max 2000 chars; chain array validated for structure and max depth 20
+- **Security headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, CSP (without `unsafe-eval`) in `next.config.ts`
+- **Response validation**: Runtime type guards validate all K2 API responses before use
 - **API key protection**: K2 API key is server-side only via `.env.local`, never exposed to client
-- **Error sanitization**: K2 API errors are logged server-side but generic messages returned to client. ErrorBoundary and global-error show sanitized messages only.
-- **ErrorBoundary**: Wraps the entire app to catch React rendering errors gracefully
+- **Error sanitization**: K2 errors logged server-side, generic messages returned to client
+- **ErrorBoundary**: Wraps the entire app to catch React rendering errors
 
 ### Keyboard Shortcuts
 
@@ -107,7 +151,8 @@ Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream
 - `Ctrl+Shift+Z` / `Ctrl+Y` — Redo
 - `Ctrl+S` — Save timeline to localStorage
 - `Ctrl+E` — Export timeline as JSON
-- `Escape` — Close detail panel / search
+- `Delete` — Delete selected node (editor mode)
+- `Escape` — Close detail panel / search / modals
 
 ## Tech Stack
 
@@ -124,6 +169,7 @@ Both API routes (`/api/generate`, `/api/expand`) use the shared `createSSEStream
 - **Prettier** (with `prettier-plugin-tailwindcss`) for formatting
 - **Husky + lint-staged** for pre-commit hooks (lint + format)
 - **GitHub Actions** CI pipeline (lint, format check, typecheck, test, build)
+- **Docker** — Dockerfile + docker-compose.yml for containerized deployment
 
 ## Environment Variables
 
@@ -134,13 +180,15 @@ Required in `frontend/.env.local` (see `.env.example` for template):
 
 ## Testing
 
-Tests live alongside source files as `*.test.ts`. Current test coverage (54 tests):
-- `lib/validate.test.ts` — Type guard validation (10 tests)
+Tests live alongside source files as `*.test.ts`. Current test coverage (103 tests):
+- `lib/validate.test.ts` — Type guard validation for core responses (10 tests)
+- `lib/game-validate.test.ts` — Type guard validation for game mode responses (38 tests)
 - `lib/rate-limit.test.ts` — Rate limiter behavior (3 tests)
 - `lib/tree-layout.test.ts` — Tree layout algorithm (7 tests)
 - `lib/stream.test.ts` — `extractJSON` parser: direct JSON, `<think>` blocks, markdown fences, brace scanning (13 tests)
 - `lib/sse.test.ts` — SSE stream forwarding, malformed chunk handling (6 tests)
 - `lib/tree-utils.test.ts` — Tree manipulation: findNodeById, findChainToNode, addBranchesToNode, collectAllNodes, collapseNode (11 tests)
 - `lib/storage.test.ts` — localStorage persistence: save timelines, history, deduplication (4 tests)
+- `lib/game-storage.test.ts` — Game leaderboard persistence: butterfly/detective/fix-history scores, sorting, limits (11 tests)
 
 Run with: `npx vitest run` from `frontend/`

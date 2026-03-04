@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        K2_API_KEY: ${K2_API_KEY}
+        K2_API_URL: ${K2_API_URL:-https://api.k2think.ai/v1/chat/completions}
+        K2_MODEL: ${K2_MODEL:-MBZUAI-IFM/K2-Think-v2}
+    ports:
+      - "3000:3000"
+    environment:
+      - K2_API_KEY=${K2_API_KEY}
+      - K2_API_URL=${K2_API_URL:-https://api.k2think.ai/v1/chat/completions}
+      - K2_MODEL=${K2_MODEL:-MBZUAI-IFM/K2-Think-v2}
+    restart: unless-stopped
