@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { TimelineNode } from "@/lib/types";
 import { IMPACT_COLORS } from "@/lib/constants";
+import { soundManager } from "@/lib/sounds";
 import Spinner from "@/components/Spinner";
 
 interface DetailPanelProps {
@@ -26,11 +27,39 @@ export default function DetailPanel({
   hasChildren,
 }: DetailPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     if (!node) return;
     panelRef.current?.focus();
   }, [node]);
+
+  // Stop TTS when node changes or panel closes
+  useEffect(() => {
+    startTransition(() => setIsSpeaking(false));
+    soundManager?.stopSpeaking();
+  }, [node]);
+
+  const handleSpeak = useCallback(() => {
+    if (!node) return;
+    if (isSpeaking) {
+      soundManager?.stopSpeaking();
+      setIsSpeaking(false);
+    } else {
+      const text = `${node.year}. ${node.title}. ${node.description}`;
+      soundManager?.speak(text);
+      setIsSpeaking(true);
+      // Reset when speech ends
+      if (typeof speechSynthesis !== "undefined") {
+        const checkInterval = setInterval(() => {
+          if (!speechSynthesis.speaking) {
+            setIsSpeaking(false);
+            clearInterval(checkInterval);
+          }
+        }, 500);
+      }
+    }
+  }, [node, isSpeaking]);
 
   return (
     <AnimatePresence>
@@ -104,9 +133,39 @@ export default function DetailPanel({
             </h3>
 
             {/* Description */}
-            <p className="mb-6 text-sm leading-relaxed text-[var(--text-tertiary)]">
+            <p className="mb-3 text-sm leading-relaxed text-[var(--text-tertiary)]">
               {node.description}
             </p>
+
+            {/* Read aloud button */}
+            <button
+              onClick={handleSpeak}
+              className="mb-6 flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--violet-text)]"
+              aria-label={isSpeaking ? "Stop reading" : "Read aloud"}
+            >
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                {isSpeaking ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M10 9v6 M14 9v6"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
+                )}
+              </svg>
+              {isSpeaking ? "Stop" : "Read aloud"}
+            </button>
 
             {/* Action buttons */}
             <div className="mb-6 flex flex-col gap-2">
@@ -129,7 +188,7 @@ export default function DetailPanel({
               {hasChildren && (
                 <button
                   onClick={() => onCollapse(node.id)}
-                  className="w-full cursor-pointer rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-300/70 transition-all hover:border-red-500/30 hover:bg-red-500/10"
+                  className="w-full cursor-pointer rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-500 transition-all hover:border-red-500/30 hover:bg-red-500/10 dark:text-red-300/70"
                 >
                   Collapse branches
                 </button>
@@ -172,11 +231,11 @@ export default function DetailPanel({
             <div className="mb-4 border-t border-[var(--accent-ghost)]" />
 
             {/* Real history */}
-            <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-4">
-              <h4 className="mb-2 text-xs font-medium tracking-wider text-blue-300/60 uppercase">
+            <div className="rounded-xl border border-[var(--accent-faint)] bg-[var(--accent-ghost)] p-4">
+              <h4 className="mb-2 text-xs font-medium tracking-wider text-[var(--text-muted)] uppercase">
                 What actually happened
               </h4>
-              <p className="text-xs leading-relaxed text-blue-200/40">{realHistory}</p>
+              <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">{realHistory}</p>
             </div>
           </div>
         </motion.div>

@@ -96,6 +96,8 @@ export function exportTimelineJSON(data: ScenarioResponse, scenario: string): vo
   const a = document.createElement("a");
   a.href = url;
   a.download = `what-if-${scenario.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "-")}.json`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

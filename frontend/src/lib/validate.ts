@@ -1,4 +1,4 @@
-import type { TimelineNode, ScenarioResponse, ExpandResponse } from "./types";
+import type { TimelineNode, ScenarioResponse, ExpandResponse, ParadoxResponse } from "./types";
 
 const VALID_IMPACTS = new Set(["critical", "high", "medium", "low"]);
 
@@ -31,4 +31,23 @@ export function isExpandResponse(obj: unknown): obj is ExpandResponse {
   if (!obj || typeof obj !== "object") return false;
   const data = obj as Record<string, unknown>;
   return Array.isArray(data.branches) && data.branches.every(isTimelineNode);
+}
+
+const VALID_SEVERITY = new Set(["critical", "minor"]);
+
+export function isParadoxResponse(obj: unknown): obj is ParadoxResponse {
+  if (!obj || typeof obj !== "object") return false;
+  const data = obj as Record<string, unknown>;
+  if (!Array.isArray(data.paradoxes)) return false;
+  return data.paradoxes.every((p: unknown) => {
+    if (!p || typeof p !== "object") return false;
+    const paradox = p as Record<string, unknown>;
+    return (
+      typeof paradox.id === "string" &&
+      Array.isArray(paradox.nodeIds) &&
+      typeof paradox.description === "string" &&
+      typeof paradox.severity === "string" &&
+      VALID_SEVERITY.has(paradox.severity)
+    );
+  });
 }

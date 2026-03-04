@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, startTransition } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/Spinner";
 import ThemeToggle from "@/components/ThemeToggle";
+import SoundToggle from "@/components/SoundToggle";
 import SavedTimelinesModal from "@/components/SavedTimelinesModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { getHistory, clearHistory, type HistoryEntry } from "@/lib/storage";
@@ -21,16 +22,17 @@ const EXAMPLE_SCENARIOS = [
 ];
 
 function useHistory() {
-  const [history, setHistory] = useState<HistoryEntry[]>(() => {
-    if (typeof window === "undefined") return [];
-    return getHistory();
-  });
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  useEffect(() => {
+    startTransition(() => setHistory(getHistory()));
+  }, []);
   return { history, setHistory };
 }
 
 export default function Home() {
   const [scenario, setScenario] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showSavedTimelines, setShowSavedTimelines] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { history, setHistory } = useHistory();
@@ -81,6 +83,7 @@ export default function Home() {
             />
           </svg>
         </button>
+        <SoundToggle />
         <ThemeToggle />
       </div>
 
@@ -142,6 +145,7 @@ export default function Home() {
               placeholder="What if...?"
               rows={3}
               maxLength={MAX_SCENARIO_LENGTH}
+              ref={textareaRef}
               aria-label="Enter your what-if scenario"
               className="w-full resize-none rounded-2xl border border-[var(--accent-faint)] bg-[var(--surface-primary)] px-4 py-3 text-base text-[var(--text-primary)] placeholder-[var(--text-faint)] backdrop-blur-sm transition-colors outline-none focus:border-[var(--accent-soft)] focus:ring-2 focus:ring-[var(--accent-muted)] sm:px-6 sm:py-4 sm:text-lg"
             />
@@ -183,7 +187,11 @@ export default function Home() {
             {EXAMPLE_SCENARIOS.map((example) => (
               <button
                 key={example}
-                onClick={() => navigateToScenario(example)}
+                onClick={() => {
+                  setScenario(example);
+                  textareaRef.current?.focus();
+                  textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
                 className="cursor-pointer rounded-lg border border-[var(--accent-ghost)] bg-[var(--accent-ghost)] px-3 py-1.5 text-sm text-[var(--violet-text-muted)] transition-all hover:border-[var(--accent-muted)] hover:bg-[var(--accent-ghost)] hover:text-[var(--violet-text)]"
               >
                 {example}

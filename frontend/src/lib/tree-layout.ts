@@ -28,7 +28,8 @@ function layoutNode(
   selectedNodeId: string | null,
   onExpand: (nodeId: string) => void,
   onSelect: (nodeId: string) => void,
-  newNodeIds?: Set<string>
+  newNodeIds?: Set<string>,
+  paradoxNodeIds?: Set<string>
 ) {
   const isRoot = parentId === null;
   const hasChildren = node.branches.length > 0;
@@ -45,6 +46,7 @@ function layoutNode(
       isExpanding: node.id === expandingNodeId,
       hasChildren,
       isNew: newNodeIds?.has(node.id) ?? false,
+      isParadox: paradoxNodeIds?.has(node.id) ?? false,
       onExpand,
       onSelect,
     },
@@ -84,7 +86,8 @@ function layoutNode(
         selectedNodeId,
         onExpand,
         onSelect,
-        newNodeIds
+        newNodeIds,
+        paradoxNodeIds
       );
 
       startX += childWidth + H_GAP;
@@ -98,7 +101,8 @@ export function buildTreeLayout(
   selectedNodeId: string | null,
   onExpand: (nodeId: string) => void,
   onSelect: (nodeId: string) => void,
-  newNodeIds?: Set<string>
+  newNodeIds?: Set<string>,
+  paradoxNodeIds?: Set<string>
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -115,7 +119,8 @@ export function buildTreeLayout(
     selectedNodeId,
     onExpand,
     onSelect,
-    newNodeIds
+    newNodeIds,
+    paradoxNodeIds
   );
 
   // Highlight path to selected node

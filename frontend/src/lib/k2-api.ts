@@ -29,6 +29,41 @@ export function validateScenario(scenario: unknown): string | null {
   return null;
 }
 
+export async function fetchFromK2(
+  config: K2Config,
+  messages: { role: string; content: string }[]
+): Promise<{ content: string } | { error: string }> {
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        stream: false,
+        max_tokens: 4096,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!response.ok) {
+      console.error("K2 API error:", response.status);
+      return { error: "AI service unavailable" };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return { error: "Empty response from AI" };
+    return { content };
+  } catch (err) {
+    console.error("K2 fetch error:", err);
+    return { error: "Failed to reach AI service" };
+  }
+}
+
 export async function streamFromK2(
   config: K2Config,
   messages: { role: string; content: string }[]

@@ -72,7 +72,7 @@ export function checkRateLimit(
 }
 
 export function rateLimitResponse(resetTime: number): Response {
-  const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
+  const retryAfter = Math.max(1, Math.ceil((resetTime - Date.now()) / 1000));
   return Response.json(
     { error: "Too many requests. Please try again later.", retryAfter },
     {

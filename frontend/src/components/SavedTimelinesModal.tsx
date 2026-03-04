@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { getSavedTimelines, deleteSavedTimeline, type SavedTimeline } from "@/lib/storage";
@@ -15,6 +15,18 @@ export default function SavedTimelinesModal({ isOpen, onClose }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Read from localStorage whenever the modal is open and refreshKey changes
   const timelines: SavedTimeline[] = useMemo(() => {

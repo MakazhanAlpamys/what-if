@@ -21,6 +21,7 @@ import TimelineNodeComponent from "@/components/TimelineNode";
 import DetailPanel from "@/components/DetailPanel";
 import SearchBar from "@/components/SearchBar";
 import ThemeToggle from "@/components/ThemeToggle";
+import SoundToggle from "@/components/SoundToggle";
 import Spinner from "@/components/Spinner";
 import ErrorIcon from "@/components/ErrorIcon";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -28,6 +29,7 @@ import ToolbarMenu from "@/components/ToolbarMenu";
 import { streamGenerate, streamExpand } from "@/lib/stream";
 import { buildTreeLayout } from "@/lib/tree-layout";
 import { MAX_TREE_DEPTH } from "@/lib/constants";
+import { soundManager } from "@/lib/sounds";
 import {
   findNodeById,
   findChainToNode,
@@ -38,7 +40,7 @@ import {
 import { saveTimeline, exportTimelineJSON, addToHistory, getTimelineById } from "@/lib/storage";
 import { generateShareURL, copyToClipboard, decodeTimeline } from "@/lib/share";
 import { exportAsPNG, exportAsSVG } from "@/lib/export-image";
-import type { ScenarioResponse } from "@/lib/types";
+import type { ScenarioResponse, Paradox } from "@/lib/types";
 
 const nodeTypes = { timelineNode: TimelineNodeComponent };
 
@@ -60,9 +62,15 @@ function TimelineContent() {
   const [newNodeIds, setNewNodeIds] = useState<Set<string>>(new Set());
   const [collapseConfirmNodeId, setCollapseConfirmNodeId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [paradoxes, setParadoxes] = useState<Paradox[]>([]);
+  const [paradoxNodeIds, setParadoxNodeIds] = useState<Set<string>>(new Set());
+  const [isCheckingParadox, setIsCheckingParadox] = useState(false);
+  const [showParadoxPanel, setShowParadoxPanel] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const expandAbortRef = useRef<AbortController | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newNodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Undo/redo state
   const [undoStack, setUndoStack] = useState<ScenarioResponse[]>([]);
@@ -74,8 +82,9 @@ function TimelineContent() {
   const { setCenter, getNode } = useReactFlow();
 
   const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
   const pushUndo = useCallback((data: ScenarioResponse) => {
@@ -135,8 +144,9 @@ function TimelineContent() {
           data.branches.forEach((b) => {
             collectAllNodes(b).forEach((n) => ids.add(n.id));
           });
+          if (newNodeTimerRef.current) clearTimeout(newNodeTimerRef.current);
           setNewNodeIds(ids);
-          setTimeout(() => setNewNodeIds(new Set()), 1500);
+          newNodeTimerRef.current = setTimeout(() => setNewNodeIds(new Set()), 1500);
 
           setScenarioData((prev) => {
             if (!prev) return prev;
@@ -148,11 +158,13 @@ function TimelineContent() {
           });
           setExpandingNodeId(null);
           expandAbortRef.current = null;
+          soundManager?.playWhoosh();
         },
         (err) => {
           console.error("Expand error:", err);
           setExpandingNodeId(null);
           expandAbortRef.current = null;
+          soundManager?.playError();
           showToast("Failed to expand branch. Try again.");
         },
         expandAbort.signal
@@ -186,6 +198,7 @@ function TimelineContent() {
   }, [collapseConfirmNodeId, handleCollapse]);
 
   const handleSelect = useCallback((nodeId: string) => {
+    soundManager?.playClick();
     setSelectedNodeId((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
@@ -248,11 +261,51 @@ function TimelineContent() {
     setShowExportMenu(false);
   }, [displayScenario, showToast]);
 
+  const handleCheckParadox = useCallback(async () => {
+    if (!scenarioData || isCheckingParadox) return;
+    setIsCheckingParadox(true);
+    try {
+      const res = await fetch("/api/paradox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario: displayScenario,
+          timeline: scenarioData.timeline,
+        }),
+      });
+      if (!res.ok) {
+        showToast("Failed to check for paradoxes");
+        return;
+      }
+      const data = await res.json();
+      if (data.paradoxes && data.paradoxes.length > 0) {
+        setParadoxes(data.paradoxes);
+        const ids = new Set<string>();
+        data.paradoxes.forEach((p: Paradox) => p.nodeIds.forEach((id: string) => ids.add(id)));
+        setParadoxNodeIds(ids);
+        setShowParadoxPanel(true);
+        soundManager?.playParadox();
+        showToast(
+          `${data.paradoxes.length} paradox${data.paradoxes.length > 1 ? "es" : ""} detected!`
+        );
+      } else {
+        setParadoxes([]);
+        setParadoxNodeIds(new Set());
+        showToast("No paradoxes detected! Timeline is logically consistent.");
+      }
+    } catch {
+      showToast("Failed to check for paradoxes");
+    } finally {
+      setIsCheckingParadox(false);
+    }
+  }, [scenarioData, isCheckingParadox, displayScenario, showToast]);
+
   const startGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
     setError(null);
     setIsGenerating(true);
     setStreamText("");
+    soundManager?.playPortalOpen();
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -265,10 +318,12 @@ function TimelineContent() {
         setIsGenerating(false);
         setStreamText("");
         addToHistory(scenario);
+        soundManager?.playSuccess();
       },
       (err) => {
         setError(err);
         setIsGenerating(false);
+        soundManager?.playError();
       },
       abortController.signal
     );
@@ -284,7 +339,8 @@ function TimelineContent() {
       selectedNodeId,
       handleExpand,
       handleSelect,
-      newNodeIds
+      newNodeIds,
+      paradoxNodeIds
     );
 
     setNodes(layoutNodes);
@@ -294,6 +350,7 @@ function TimelineContent() {
     expandingNodeId,
     selectedNodeId,
     newNodeIds,
+    paradoxNodeIds,
     handleExpand,
     handleSelect,
     setNodes,
@@ -542,11 +599,38 @@ function TimelineContent() {
             {shareIcon}
           </button>
 
+          <button
+            onClick={handleCheckParadox}
+            disabled={!scenarioData || isCheckingParadox}
+            aria-label="Check for paradoxes"
+            title="Check for paradoxes"
+            className={btnClass}
+          >
+            {isCheckingParadox ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+            )}
+          </button>
+
           <SearchBar
             root={scenarioData?.timeline ?? null}
             onSelectNode={handleSelect}
             onNavigateToNode={handleNavigateToNode}
           />
+          <SoundToggle />
           <ThemeToggle />
         </div>
 
@@ -589,6 +673,7 @@ function TimelineContent() {
               { label: "Share", icon: shareIcon, onClick: handleShare, disabled: !scenarioData },
             ]}
           />
+          <SoundToggle />
           <ThemeToggle />
         </div>
       </div>
@@ -631,11 +716,34 @@ function TimelineContent() {
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[var(--surface-overlay)]"
           >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              className="mb-6 h-20 w-20 rounded-full border-2 border-[var(--accent-faint)] border-t-[var(--accent)]"
-            />
+            {/* Vortex animation */}
+            <div className="relative mb-6 h-28 w-28">
+              {[0, 1, 2, 3].map((i) => (
+                <motion.div
+                  key={i}
+                  animate={{ rotate: 360 }}
+                  transition={{
+                    duration: 3 + i * 1.5,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
+                  className="vortex-ring"
+                  style={{
+                    width: `${100 - i * 18}%`,
+                    height: `${100 - i * 18}%`,
+                    top: `${i * 9}%`,
+                    left: `${i * 9}%`,
+                    borderColor: `rgba(139, 92, 246, ${0.15 + i * 0.1})`,
+                    opacity: 0.4 + i * 0.15,
+                  }}
+                />
+              ))}
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute top-1/2 left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.6)]"
+              />
+            </div>
             <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
               Creating alternate reality...
             </h2>
@@ -671,12 +779,14 @@ function TimelineContent() {
             </h2>
             <p className="mb-6 text-sm text-[var(--text-faint)]">{error}</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <button
-                onClick={startGeneration}
-                className="cursor-pointer rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
-              >
-                Retry this scenario
-              </button>
+              {scenario && (
+                <button
+                  onClick={startGeneration}
+                  className="cursor-pointer rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
+                >
+                  Retry this scenario
+                </button>
+              )}
               <button
                 onClick={() => router.push("/")}
                 className="cursor-pointer rounded-xl border border-[var(--accent-faint)] bg-transparent px-6 py-2.5 text-sm font-medium text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-muted)] hover:text-[var(--text-secondary)]"
@@ -750,6 +860,82 @@ function TimelineContent() {
         onConfirm={handleCollapseConfirm}
         onCancel={() => setCollapseConfirmNodeId(null)}
       />
+
+      {/* Paradox results panel */}
+      <AnimatePresence>
+        {showParadoxPanel && paradoxes.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, x: -300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -300 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed top-14 left-4 z-50 max-h-[70vh] w-80 overflow-y-auto rounded-2xl border border-red-500/20 bg-[var(--surface-secondary)] p-4 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-red-400">
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                </svg>
+                {paradoxes.length} Paradox{paradoxes.length > 1 ? "es" : ""} Found
+              </h3>
+              <button
+                onClick={() => {
+                  setShowParadoxPanel(false);
+                  setParadoxes([]);
+                  setParadoxNodeIds(new Set());
+                }}
+                className="cursor-pointer rounded-lg p-1 text-[var(--text-faint)] transition-colors hover:text-[var(--text-secondary)]"
+                aria-label="Close paradox panel"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-3">
+              {paradoxes.map((p) => (
+                <div
+                  key={p.id}
+                  className={`rounded-xl border p-3 ${
+                    p.severity === "critical"
+                      ? "border-red-500/30 bg-red-500/5"
+                      : "border-yellow-500/20 bg-yellow-500/5"
+                  }`}
+                >
+                  <span
+                    className={`mb-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
+                      p.severity === "critical"
+                        ? "bg-red-500/15 text-red-400"
+                        : "bg-yellow-500/15 text-yellow-400"
+                    }`}
+                  >
+                    {p.severity}
+                  </span>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--text-tertiary)]">
+                    {p.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Keyboard shortcuts help (bottom) */}
       {scenarioData && !isGenerating && (

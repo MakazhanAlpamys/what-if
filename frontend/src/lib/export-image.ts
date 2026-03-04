@@ -7,7 +7,7 @@ function getViewportElement(): HTMLElement | null {
 }
 
 function filterNode(node: Element): boolean {
-  const className = node.className?.toString() ?? "";
+  const className = node.getAttribute?.("class") ?? "";
   return !className.includes("react-flow__controls") && !className.includes("react-flow__minimap");
 }
 
@@ -26,7 +26,9 @@ export async function exportAsPNG(filename: string): Promise<void> {
   const link = document.createElement("a");
   link.download = `${filename}.png`;
   link.href = dataUrl;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }
 
 export async function exportAsSVG(filename: string): Promise<void> {
@@ -43,5 +45,7 @@ export async function exportAsSVG(filename: string): Promise<void> {
   const link = document.createElement("a");
   link.download = `${filename}.svg`;
   link.href = dataUrl;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }

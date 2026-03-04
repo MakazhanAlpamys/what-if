@@ -1,5 +1,6 @@
 import LZString from "lz-string";
 import type { ScenarioResponse } from "./types";
+import { isScenarioResponse } from "./validate";
 
 export function encodeTimeline(data: ScenarioResponse): string {
   const json = JSON.stringify(data);
@@ -11,8 +12,8 @@ export function decodeTimeline(encoded: string): ScenarioResponse | null {
     const json = LZString.decompressFromEncodedURIComponent(encoded);
     if (!json) return null;
     const parsed = JSON.parse(json);
-    if (parsed && parsed.scenario && parsed.timeline) {
-      return parsed as ScenarioResponse;
+    if (isScenarioResponse(parsed)) {
+      return parsed;
     }
     return null;
   } catch {

@@ -16,3 +16,14 @@ export interface ScenarioResponse {
 export interface ExpandResponse {
   branches: TimelineNode[];
 }
+
+export interface Paradox {
+  id: string;
+  nodeIds: string[];
+  description: string;
+  severity: "critical" | "minor";
+}
+
+export interface ParadoxResponse {
+  paradoxes: Paradox[];
+}

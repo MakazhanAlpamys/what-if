@@ -50,6 +50,7 @@ export default function SearchBar({ root, onSelectNode, onNavigateToNode }: Sear
         setIsOpen((prev) => !prev);
       }
       if (e.key === "Escape" && isOpen) {
+        e.stopPropagation();
         setIsOpen(false);
         setQuery("");
         setResults([]);

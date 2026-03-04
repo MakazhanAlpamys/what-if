@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import type { TimelineNode as TNode } from "@/lib/types";
@@ -15,14 +15,45 @@ type TimelineNodeData = {
   isExpanding: boolean;
   hasChildren: boolean;
   isNew: boolean;
+  isParadox: boolean;
   onExpand: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
 };
 
+const PARTICLE_COUNT = 10;
+
 function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData }) {
-  const { timelineNode, isRoot, isSelected, isExpanding, hasChildren, isNew, onExpand, onSelect } =
-    data;
+  const {
+    timelineNode,
+    isRoot,
+    isSelected,
+    isExpanding,
+    hasChildren,
+    isNew,
+    isParadox,
+    onExpand,
+    onSelect,
+  } = data;
   const color = IMPACT_COLORS[timelineNode.impact];
+
+  // Pre-compute particle styles so they stay stable across renders
+  // Uses a deterministic seeded function instead of Math.random() for render purity
+  const particles = useMemo(() => {
+    if (!isNew) return [];
+    const seeded = (seed: number) => {
+      const x = Math.sin(seed + 1) * 10000;
+      return x - Math.floor(x);
+    };
+    return Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+      const angle = i * ((2 * Math.PI) / PARTICLE_COUNT) + (seeded(i) - 0.5) * 0.5;
+      const dist = 35 + seeded(i + PARTICLE_COUNT) * 30;
+      return {
+        tx: `${Math.cos(angle) * dist}px`,
+        ty: `${Math.sin(angle) * dist}px`,
+        delay: `${i * 0.04}s`,
+      };
+    });
+  }, [isNew]);
 
   return (
     <motion.div
@@ -41,7 +72,7 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
       role="button"
       tabIndex={0}
       aria-label={`${timelineNode.year}: ${timelineNode.title} — ${IMPACT_LABELS[timelineNode.impact]} impact`}
-      className="cursor-pointer"
+      className="relative cursor-pointer"
       style={{ minWidth: 220, maxWidth: 280 }}
     >
       {!isRoot && (
@@ -53,14 +84,29 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
       )}
 
       <div
-        className={`rounded-xl border p-3 backdrop-blur-sm transition-all sm:p-4 ${
+        className={`node-glow rounded-xl border p-3 backdrop-blur-sm transition-all sm:p-4 ${
           isExpanding ? "animate-pulse ring-2 ring-violet-500/40" : ""
-        } ${
+        } ${isParadox ? "paradox-node" : ""} ${
           isSelected
             ? "border-[var(--node-border-selected)] bg-[var(--node-bg-selected)] shadow-lg shadow-violet-500/20"
             : "border-[var(--node-border)] bg-[var(--node-bg)] hover:border-[var(--node-border-hover)]"
         }`}
+        style={{
+          boxShadow: isSelected
+            ? undefined
+            : `0 0 ${isParadox ? "12px" : "8px"} ${isParadox ? "rgba(239, 68, 68, 0.15)" : `${color}15`}`,
+        }}
       >
+        {/* Paradox warning icon */}
+        {isParadox && (
+          <div
+            className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-lg"
+            title="Paradox detected"
+          >
+            !
+          </div>
+        )}
+
         {/* Year badge */}
         <div className="mb-2 flex items-center justify-between">
           <span
@@ -108,6 +154,29 @@ function TimelineNodeComponent({ data }: NodeProps & { data: TimelineNodeData })
           </button>
         )}
       </div>
+
+      {/* Particle burst for new nodes */}
+      {isNew && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          {particles.map((p, i) => (
+            <div
+              key={i}
+              className="node-particle"
+              style={
+                {
+                  left: "50%",
+                  top: "50%",
+                  backgroundColor: color,
+                  boxShadow: `0 0 6px ${color}`,
+                  "--tx": p.tx,
+                  "--ty": p.ty,
+                  "--delay": p.delay,
+                } as React.CSSProperties
+              }
+            />
+          ))}
+        </div>
+      )}
 
       <Handle
         type="source"
